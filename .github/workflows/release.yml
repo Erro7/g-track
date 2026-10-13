@@ -54,7 +54,7 @@ jobs:
       # 如需上架签名版，在仓库 Secrets 里放 KEYSTORE_BASE64 / KEYSTORE_PASSWORD / KEY_ALIAS / KEY_PASSWORD，
       # 并在 app/build.gradle.kts 增加对应的 signingConfig。
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.event.inputs.tag || github.ref_name }}
           name: GTRACK v${{ env.VERSION }}
