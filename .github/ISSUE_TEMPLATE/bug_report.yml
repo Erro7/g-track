@@ -1,0 +1,72 @@
+name: Bug 报告
+
+description: 提交可复现的缺陷（安全 / 合规问题请走 SECURITY.md，不要开公开 issue）
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        提交前请先搜索是否已有相同 issue。安全与合规问题**不要**在这里提交。
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: 平台
+      options: [Android, iOS, 两端, 设计稿 / 文档]
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: 版本 / commit
+      description: App 版本号或仓库 commit（如 1.0.0 / a1b2c3d）
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: 设备与系统
+      description: 例如 Pixel 8 / Android 15，或 iPhone 17 / iOS 26.0
+    validations:
+      required: false
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 1. … 2. … 3. …
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望行为
+      description: 对照 DESIGN.md / prototype.html 说明预期表现
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际行为
+    validations:
+      required: true
+
+  - type: textarea
+    id: media
+    attributes:
+      label: 截图 / 录屏
+      description: 视觉类问题请务必附上
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志（如有）
+      render: shell
+    validations:
+      required: false

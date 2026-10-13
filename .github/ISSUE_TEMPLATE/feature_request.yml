@@ -1,0 +1,52 @@
+name: 功能建议 / 改进
+
+description: 新能力、体验改进或规范补充（改动需对照 DESIGN.md 与 prototype.html）
+
+body:
+  - type: dropdown
+    id: kind
+    attributes:
+      label: 类型
+      options: [新功能, 体验改进, 视觉 / 规范, 文档, 其他]
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: 要解决什么问题
+      description: 说明场景与现状，不要直接只写方案
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 建议方案
+      description: 涉及界面时请说明与 DESIGN.md / prototype.html 的关系（对齐还是变更）
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: 影响范围
+      options: [Android, iOS, 两端, 设计稿 / 文档]
+    validations:
+      required: true
+
+  - type: textarea
+    id: compliance
+    attributes:
+      label: 合规自查
+      description: |
+        本工具只做公开信息核查。请确认该建议不涉及：非公开数据获取、绕过认证、人肉搜索、伪造数据。
+    validations:
+      required: false
+
+  - type: textarea
+    id: media
+    attributes:
+      label: 参考图 / 原型片段
+    validations:
+      required: false

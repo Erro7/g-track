@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="UTF-8"><style>
+html, body { margin:0; padding:0; background:#888; width:fit-content; overflow:hidden; }
+.tile { line-height:0; }
+svg { display:block; }
+</style></head><body>
+<script>
+const want = (location.hash || '#ios-1024').slice(1);
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.tile').forEach(t => { if (t.id !== want) t.style.display = 'none'; });
+  document.title = want;
+});
+</script>
+<div class="tile" id="ios-1024">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="1024" height="1024">
+  <defs><radialGradient id="g1" cx=".5" cy=".42" r=".75"><stop offset="0" stop-color="#0C2118"/><stop offset=".6" stop-color="#050B08"/><stop offset="1" stop-color="#010403"/></radialGradient></defs>
+  <rect width="100" height="100" fill="url(#g1)"/>
+  <g stroke="#30D158" fill="none"><circle cx="68" cy="68" r="15" stroke-opacity=".6" stroke-width="2.4"/><circle cx="68" cy="68" r="26" stroke-opacity=".34" stroke-width="2" stroke-dasharray="4 5"/></g>
+  <circle cx="53" cy="68" r="3" fill="#30D158"/><circle cx="53" cy="68" r="6.5" fill="none" stroke="#30D158" stroke-opacity=".45" stroke-width="1.6"/>
+  <g transform="translate(-3,-5)"><path d="M50 26c-8.6 0-14 6-14 14.2v9.6c0 2.2 2.2 3.4 4 2.4l2.8-1.6c1.6-.9 3.5-.8 5 .2 1.4 1 3.2 1 4.6 0 1.5-1 3.4-1.1 5-.2l2.8 1.6c1.8 1 4-.2 4-2.4v-9.6C64 32 58.6 26 50 26z" fill="#30D158" fill-opacity=".18" stroke="#30D158" stroke-width="2.8"/><circle cx="46" cy="37.5" r="1.8" fill="#30D158"/><circle cx="54" cy="37.5" r="1.8" fill="#30D158"/></g>
+</svg></div>
+<div class="tile" id="play-512">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="512" height="512">
+  <defs><radialGradient id="g2" cx=".5" cy=".42" r=".75"><stop offset="0" stop-color="#0C2118"/><stop offset=".6" stop-color="#050B08"/><stop offset="1" stop-color="#010403"/></radialGradient></defs>
+  <rect width="100" height="100" fill="url(#g2)"/>
+  <g transform="translate(50 50) scale(1.12) translate(-50 -50)">
+    <g stroke="#30D158" fill="none"><circle cx="68" cy="68" r="15" stroke-opacity=".6" stroke-width="2.4"/><circle cx="68" cy="68" r="26" stroke-opacity=".34" stroke-width="2" stroke-dasharray="4 5"/></g>
+    <circle cx="53" cy="68" r="3" fill="#30D158"/><circle cx="53" cy="68" r="6.5" fill="none" stroke="#30D158" stroke-opacity=".45" stroke-width="1.6"/>
+    <g transform="translate(-3,-5)"><path d="M50 26c-8.6 0-14 6-14 14.2v9.6c0 2.2 2.2 3.4 4 2.4l2.8-1.6c1.6-.9 3.5-.8 5 .2 1.4 1 3.2 1 4.6 0 1.5-1 3.4-1.1 5-.2l2.8 1.6c1.8 1 4-.2 4-2.4v-9.6C64 32 58.6 26 50 26z" fill="#30D158" fill-opacity=".18" stroke="#30D158" stroke-width="2.8"/><circle cx="46" cy="37.5" r="1.8" fill="#30D158"/><circle cx="54" cy="37.5" r="1.8" fill="#30D158"/></g>
+  </g>
+</svg></div>
+<div class="tile" id="and-192">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="192" height="192">
+  <defs><radialGradient id="g3" cx=".5" cy=".42" r=".75"><stop offset="0" stop-color="#0C2118"/><stop offset=".6" stop-color="#050B08"/><stop offset="1" stop-color="#010403"/></radialGradient></defs>
+  <rect width="108" height="108" fill="url(#g3)"/>
+  <g stroke="#30D158" fill="none" transform="translate(50 54) translate(-53 -54)"><circle cx="53" cy="54" r="10" stroke-opacity=".62" stroke-width="2.2"/><circle cx="53" cy="54" r="17" stroke-opacity=".4" stroke-width="1.8"/></g>
+  <circle cx="43" cy="54" r="2.5" fill="#30D158"/>
+  <g transform="translate(46 39) scale(.85) translate(-50 -41.75)"><path d="M50 26c-8.6 0-14 6-14 14.2v9.6c0 2.2 2.2 3.4 4 2.4l2.8-1.6c1.6-.9 3.5-.8 5 .2 1.4 1 3.2 1 4.6 0 1.5-1 3.4-1.1 5-.2l2.8 1.6c1.8 1 4-.2 4-2.4v-9.6C64 32 58.6 26 50 26z" fill="#30D158" fill-opacity=".95" stroke="#B9F5CE" stroke-opacity=".9" stroke-width="2"/><circle cx="46" cy="37.5" r="1.8" fill="#04110A"/><circle cx="54" cy="37.5" r="1.8" fill="#04110A"/></g>
+</svg></div>
+<div class="tile" id="and-144">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="144" height="144">
+  <defs><radialGradient id="g4" cx=".5" cy=".42" r=".75"><stop offset="0" stop-color="#0C2118"/><stop offset=".6" stop-color="#050B08"/><stop offset="1" stop-color="#010403"/></radialGradient></defs>
+  <rect width="108" height="108" fill="url(#g4)"/>
+  <g stroke="#30D158" fill="none" transform="translate(50 54) translate(-53 -54)"><circle cx="53" cy="54" r="10" stroke-opacity=".62" stroke-width="2.2"/><circle cx="53" cy="54" r="17" stroke-opacity=".4" stroke-width="1.8"/></g>
+  <circle cx="43" cy="54" r="2.5" fill="#30D158"/>
+  <g transform="translate(46 39) scale(.85) translate(-50 -41.75)"><path d="M50 26c-8.6 0-14 6-14 14.2v9.6c0 2.2 2.2 3.4 4 2.4l2.8-1.6c1.6-.9 3.5-.8 5 .2 1.4 1 3.2 1 4.6 0 1.5-1 3.4-1.1 5-.2l2.8 1.6c1.8 1 4-.2 4-2.4v-9.6C64 32 58.6 26 50 26z" fill="#30D158" fill-opacity=".95" stroke="#B9F5CE" stroke-opacity=".9" stroke-width="2"/><circle cx="46" cy="37.5" r="1.8" fill="#04110A"/><circle cx="54" cy="37.5" r="1.8" fill="#04110A"/></g>
+</svg></div>
+<div class="tile" id="and-96">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="96" height="96">
+  <defs><radialGradient id="g5" cx=".5" cy=".42" r=".75"><stop offset="0" stop-color="#0C2118"/><stop offset=".6" stop-color="#050B08"/><stop offset="1" stop-color="#010403"/></radialGradient></defs>
+  <rect width="108" height="108" fill="url(#g5)"/>
+  <g stroke="#30D158" fill="none" transform="translate(50 54) translate(-53 -54)"><circle cx="53" cy="54" r="10" stroke-opacity=".62" stroke-width="2.2"/><circle cx="53" cy="54" r="17" stroke-opacity=".4" stroke-width="1.8"/></g>
+  <circle cx="43" cy="54" r="2.5" fill="#30D158"/>
+  <g transform="translate(46 39) scale(.85) translate(-50 -41.75)"><path d="M50 26c-8.6 0-14 6-14 14.2v9.6c0 2.2 2.2 3.4 4 2.4l2.8-1.6c1.6-.9 3.5-.8 5 .2 1.4 1 3.2 1 4.6 0 1.5-1 3.4-1.1 5-.2l2.8 1.6c1.8 1 4-.2 4-2.4v-9.6C64 32 58.6 26 50 26z" fill="#30D158" fill-opacity=".95" stroke="#B9F5CE" stroke-opacity=".9" stroke-width="2"/><circle cx="46" cy="37.5" r="1.8" fill="#04110A"/><circle cx="54" cy="37.5" r="1.8" fill="#04110A"/></g>
+</svg></div>
+<div class="tile" id="and-72">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="72" height="72">
+  <defs><radialGradient id="g6" cx=".5" cy=".42" r=".75"><stop offset="0" stop-color="#0C2118"/><stop offset=".6" stop-color="#050B08"/><stop offset="1" stop-color="#010403"/></radialGradient></defs>
+  <rect width="108" height="108" fill="url(#g6)"/>
+  <g stroke="#30D158" fill="none" transform="translate(50 54) translate(-53 -54)"><circle cx="53" cy="54" r="10" stroke-opacity=".62" stroke-width="2.2"/><circle cx="53" cy="54" r="17" stroke-opacity=".4" stroke-width="1.8"/></g>
+  <circle cx="43" cy="54" r="2.5" fill="#30D158"/>
+  <g transform="translate(46 39) scale(.85) translate(-50 -41.75)"><path d="M50 26c-8.6 0-14 6-14 14.2v9.6c0 2.2 2.2 3.4 4 2.4l2.8-1.6c1.6-.9 3.5-.8 5 .2 1.4 1 3.2 1 4.6 0 1.5-1 3.4-1.1 5-.2l2.8 1.6c1.8 1 4-.2 4-2.4v-9.6C64 32 58.6 26 50 26z" fill="#30D158" fill-opacity=".95" stroke="#B9F5CE" stroke-opacity=".9" stroke-width="2"/><circle cx="46" cy="37.5" r="1.8" fill="#04110A"/><circle cx="54" cy="37.5" r="1.8" fill="#04110A"/></g>
+</svg></div>
+<div class="tile" id="and-48">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="48" height="48">
+  <defs><radialGradient id="g7" cx=".5" cy=".42" r=".75"><stop offset="0" stop-color="#0C2118"/><stop offset=".6" stop-color="#050B08"/><stop offset="1" stop-color="#010403"/></radialGradient></defs>
+  <rect width="108" height="108" fill="url(#g7)"/>
+  <g stroke="#30D158" fill="none" transform="translate(50 54) translate(-53 -54)"><circle cx="53" cy="54" r="10" stroke-opacity=".62" stroke-width="2.2"/><circle cx="53" cy="54" r="17" stroke-opacity=".4" stroke-width="1.8"/></g>
+  <circle cx="43" cy="54" r="2.5" fill="#30D158"/>
+  <g transform="translate(46 39) scale(.85) translate(-50 -41.75)"><path d="M50 26c-8.6 0-14 6-14 14.2v9.6c0 2.2 2.2 3.4 4 2.4l2.8-1.6c1.6-.9 3.5-.8 5 .2 1.4 1 3.2 1 4.6 0 1.5-1 3.4-1.1 5-.2l2.8 1.6c1.8 1 4-.2 4-2.4v-9.6C64 32 58.6 26 50 26z" fill="#30D158" fill-opacity=".95" stroke="#B9F5CE" stroke-opacity=".9" stroke-width="2"/><circle cx="46" cy="37.5" r="1.8" fill="#04110A"/><circle cx="54" cy="37.5" r="1.8" fill="#04110A"/></g>
+</svg></div>
+</body></html>

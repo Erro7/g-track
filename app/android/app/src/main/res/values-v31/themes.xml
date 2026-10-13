@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android 12+ SplashScreen：图标居中、窗口底色与 App 一致（≤500ms 自动收尾） -->
+    <style name="Theme.GTRACK.Splash" parent="Theme.GTRACK">
+        <item name="android:windowSplashScreenBackground">@color/gt_bg</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+        <item name="android:windowBackground">@color/gt_bg</item>
+    </style>
+</resources>

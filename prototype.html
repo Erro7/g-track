@@ -1,0 +1,1320 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GTRACK · iOS 26 设计原型</title>
+<style>
+/* ================= 基础与画布 ================= */
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+:root { color-scheme: dark; }
+body {
+  background: #E8E8E4;
+  min-height: 100vh;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 20px; padding: 32px 16px;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+}
+.page-head { text-align: center; }
+.page-head h1 { font-size: 15px; font-weight: 600; color: #3a3a3c; letter-spacing: 0; }
+.page-head p { font-size: 12px; color: #8e8e93; margin-top: 4px; }
+.page-foot { max-width: 420px; text-align: center; font-size: 11px; line-height: 1.6; color: #98989d; }
+
+/* ================= 手机壳 390×844 ================= */
+.phone {
+  width: 390px; height: 844px; flex: 0 0 auto;
+  background: #0b0b0d;
+  border-radius: 58px; padding: 11px;
+  box-shadow: 0 24px 60px rgba(0,0,0,.34), 0 2px 8px rgba(0,0,0,.18), inset 0 0 2px rgba(255,255,255,.22);
+  position: relative;
+}
+.phone-screen {
+  width: 100%; height: 100%;
+  border-radius: 47px; overflow: hidden; position: relative;
+  background: #000;
+}
+.phone-screen[data-theme="light"] { background: #f2f2f7; }
+
+/* 环境光：为玻璃提供折射背景（磷光绿/钢青色域，低饱和） */
+.ambient { position: absolute; inset: 0; pointer-events: none; }
+.ambient::before, .ambient::after { content: ""; position: absolute; border-radius: 50%; filter: blur(60px); }
+.ambient::before { width: 340px; height: 340px; left: -90px; top: 90px; background: rgba(16,120,88,.34); }
+.ambient::after  { width: 300px; height: 300px; right: -110px; top: 430px; background: rgba(20,90,110,.30); }
+.phone-screen[data-theme="light"] .ambient::before { background: rgba(52,199,89,.16); }
+.phone-screen[data-theme="light"] .ambient::after  { background: rgba(90,170,200,.16); }
+
+/* ================= 状态栏 / 灵动岛 ================= */
+.statusbar {
+  position: absolute; top: 0; left: 0; right: 0; height: 54px; z-index: 60;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 32px 0; color: #fff; pointer-events: none;
+}
+.phone-screen[data-theme="light"] .statusbar { color: #000; }
+.statusbar .time { font-size: 15px; font-weight: 600; letter-spacing: 0; font-variant-numeric: tabular-nums; }
+.statusbar .glyphs { display: flex; gap: 6px; align-items: center; }
+.island {
+  position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+  width: 122px; height: 34px; background: #000; border-radius: 20px; z-index: 61;
+}
+.homebar {
+  position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%);
+  width: 134px; height: 5px; border-radius: 3px; background: rgba(255,255,255,.9); z-index: 60;
+}
+.phone-screen[data-theme="light"] .homebar { background: rgba(0,0,0,.85); }
+
+/* ================= 视图容器 ================= */
+.views { position: absolute; inset: 0; }
+.view {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  opacity: 0; pointer-events: none; transform: translateX(24px);
+  transition: opacity .28s ease, transform .32s cubic-bezier(.32,.72,0,1);
+}
+.view.on { opacity: 1; pointer-events: auto; transform: translateX(0); z-index: 5; }
+.view.root { transform: none; }
+.view.root.on { z-index: 4; }
+.view.push { background: transparent; }
+.view.ghost { visibility: hidden; }
+.view.push .scroll, .view.root .scroll { background: transparent; }
+
+.scroll {
+  flex: 1; overflow-y: auto; overscroll-behavior: contain;
+  padding: 70px 16px 120px; scrollbar-width: none;
+}
+.scroll::-webkit-scrollbar { display: none; }
+
+/* ================= Liquid Glass 材质 ================= */
+.glass {
+  background: rgba(28,28,30,.55);
+  -webkit-backdrop-filter: blur(20px) saturate(1.8);
+  backdrop-filter: blur(20px) saturate(1.8);
+  border: 1px solid rgba(255,255,255,.12);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.16), inset 0 -1px 0 rgba(255,255,255,.04), 0 8px 28px rgba(0,0,0,.35);
+  border-radius: 26px;
+}
+.phone-screen[data-theme="light"] .glass {
+  background: rgba(255,255,255,.62);
+  border-color: rgba(255,255,255,.65);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 8px 28px rgba(60,60,67,.10);
+}
+
+/* 玻璃导航条（大标题滚入后出现） */
+.navglass {
+  position: absolute; top: 0; left: 0; right: 0; z-index: 50;
+  height: 98px; border-radius: 0;
+  display: flex; align-items: flex-end;
+  padding: 0 16px 10px;
+  background: rgba(10,10,12,.42);
+  -webkit-backdrop-filter: blur(20px) saturate(1.8);
+  backdrop-filter: blur(20px) saturate(1.8);
+  border-bottom: 1px solid rgba(255,255,255,.08);
+  opacity: 0; transition: opacity .2s ease; pointer-events: none;
+}
+.phone-screen[data-theme="light"] .navglass { background: rgba(255,255,255,.55); border-bottom-color: rgba(0,0,0,.06); }
+.navglass.show { opacity: 1; }
+.navglass .t { font-size: 17px; font-weight: 600; color: var(--label); flex: 1; text-align: center; }
+
+/* push 视图顶栏（常驻） */
+.pushbar {
+  position: absolute; top: 0; left: 0; right: 0; z-index: 50;
+  height: 98px; display: flex; align-items: flex-end;
+  padding: 0 12px 10px;
+  background: rgba(10,10,12,.42);
+  -webkit-backdrop-filter: blur(20px) saturate(1.8);
+  backdrop-filter: blur(20px) saturate(1.8);
+  border-bottom: 1px solid rgba(255,255,255,.08);
+}
+.phone-screen[data-theme="light"] .pushbar { background: rgba(255,255,255,.55); border-bottom-color: rgba(0,0,0,.06); }
+.pushbar .t { font-size: 17px; font-weight: 600; color: var(--label); position: absolute; left: 0; right: 0; bottom: 13px; text-align: center; pointer-events: none; }
+.backbtn {
+  position: relative; z-index: 2; display: inline-flex; align-items: center; gap: 2px;
+  border: 0; background: none; cursor: pointer; padding: 6px 8px 6px 2px;
+  color: var(--blue); font-size: 15px; font-family: inherit;
+}
+.backbtn:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; border-radius: 8px; }
+
+/* ================= 色板 token（iOS 26 深色默认） ================= */
+.phone-screen {
+  --label: #f2f2f7;
+  --label2: rgba(235,235,245,.62);
+  --label3: rgba(235,235,245,.32);
+  --sep: rgba(255,255,255,.08);
+  --green: #30d158;
+  --blue: #0a84ff;
+  --red: #ff453a;
+  --orange: #ff9f0a;
+  --fill: rgba(120,120,128,.24);
+}
+.phone-screen[data-theme="light"] {
+  --label: #1c1c1e;
+  --label2: rgba(60,60,67,.62);
+  --label3: rgba(60,60,67,.30);
+  --sep: rgba(0,0,0,.07);
+  --green: #1fa84b;
+  --blue: #007aff;
+  --red: #e0362c;
+  --orange: #c27500;
+  --fill: rgba(120,120,128,.14);
+}
+
+.verfoot {
+  display: block; width: 100%; border: 0; background: none; cursor: pointer; font-family: inherit;
+  text-align: center; font-size: 11.5px; color: var(--label3); margin-top: 20px; padding: 4px 0;
+  -webkit-user-select: none; user-select: none;
+}
+.verfoot:focus-visible { outline: 2px solid var(--green); outline-offset: 3px; border-radius: 8px; }
+
+/* ================= 排版 ================= */
+.lg-title { font-size: 34px; font-weight: 700; letter-spacing: .2px; color: var(--label); }
+.sec-head { display: flex; align-items: baseline; justify-content: space-between; margin: 26px 4px 10px; }
+.sec-head h2 { font-size: 15px; font-weight: 600; color: var(--label2); letter-spacing: 0; }
+.sec-head button {
+  border: 0; background: none; cursor: pointer; font-family: inherit;
+  font-size: 14px; color: var(--blue); padding: 2px 4px;
+}
+.sec-head button:focus-visible, .row:focus-visible, .cardbtn:focus-visible, .tabbtn:focus-visible,
+.iconbtn:focus-visible, .cta:focus-visible, .ghostbtn:focus-visible, .seg button:focus-visible {
+  outline: 2px solid var(--green); outline-offset: 2px; border-radius: 10px;
+}
+.mono { font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; }
+
+/* ================= 行 / 分组列表 ================= */
+.group { overflow: hidden; }
+.row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 13px 16px; min-height: 50px; cursor: pointer; border: 0; width: 100%;
+  background: none; text-align: left; font-family: inherit; position: relative;
+}
+.row + .row::before { content: ""; position: absolute; top: 0; left: 50px; right: 0; height: 1px; background: var(--sep); }
+.row .ricon { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex: 0 0 auto; color: #fff; }
+.row .rmain { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.row .rmain .rt { display: block; font-size: 16px; color: var(--label); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row .rmain .rs { display: block; font-size: 13px; color: var(--label2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row .chev { color: var(--label3); flex: 0 0 auto; display: flex; }
+
+/* 卡片入口（侦查台三入口：垂直列表，不做均分网格） */
+.cardbtn {
+  display: flex; align-items: center; gap: 14px; width: 100%;
+  padding: 15px 16px; cursor: pointer; text-align: left; font-family: inherit;
+  border-radius: 26px; margin-bottom: 10px;
+}
+.cardbtn:focus-visible { outline-offset: 3px; }
+.cardbtn .cicon {
+  width: 44px; height: 44px; border-radius: 14px; flex: 0 0 auto;
+  display: flex; align-items: center; justify-content: center; color: #fff;
+  background: linear-gradient(160deg, rgba(255,255,255,.22), rgba(255,255,255,.02)), var(--tint, var(--green));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.35);
+}
+.cardbtn .cmain { flex: 1; min-width: 0; }
+.cardbtn .cmain .ct { font-size: 17px; font-weight: 600; color: var(--label); }
+.cardbtn .cmain .cd { font-size: 13px; color: var(--label2); margin-top: 2px; }
+.cardbtn .chev { color: var(--label3); display: flex; }
+
+/* 图标按钮 */
+.iconbtn {
+  width: 34px; height: 34px; border-radius: 17px; border: 0; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--fill); color: var(--label); flex: 0 0 auto;
+}
+.iconbtn.spin svg { animation: rot .8s linear; }
+@keyframes rot { to { transform: rotate(360deg); } }
+
+/* ================= 表单 ================= */
+.field { margin-bottom: 14px; }
+.field label { display: block; font-size: 13px; color: var(--label2); margin: 0 4px 7px; font-weight: 600; }
+.field .fwrap { display: flex; gap: 8px; align-items: stretch; }
+.inp {
+  flex: 1; min-width: 0; height: 52px; border-radius: 16px;
+  background: var(--fill); border: 1.5px solid transparent;
+  color: var(--label); font-size: 17px; font-family: inherit; padding: 0 16px;
+  transition: border-color .18s ease, background .18s ease;
+}
+.inp.mono { font-size: 16px; letter-spacing: .3px; }
+.inp::placeholder { color: var(--label3); }
+.inp:focus { outline: none; border-color: var(--green); }
+.inp.err { border-color: var(--red); }
+.inp:disabled { opacity: .5; }
+.errline { display: none; margin: 8px 4px 0; font-size: 13px; color: var(--red); line-height: 1.45; }
+.errline.show { display: block; }
+.ccprefix {
+  flex: 0 0 auto; height: 52px; padding: 0 14px; border-radius: 16px; cursor: pointer;
+  display: flex; align-items: center; gap: 4px; border: 0; font-family: inherit;
+  background: var(--fill); color: var(--label); font-size: 17px; font-weight: 600;
+}
+
+/* 按钮 */
+.cta {
+  width: 100%; height: 52px; border-radius: 26px; border: 0; cursor: pointer;
+  font-family: inherit; font-size: 17px; font-weight: 600;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  background: var(--green); color: #04110a;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.4);
+  transition: transform .15s ease, opacity .2s ease;
+}
+.cta:active { transform: scale(.98); }
+.cta:disabled { opacity: .4; cursor: default; }
+.cta.blue { background: var(--blue); color: #fff; }
+.cta.ghost {
+  background: var(--fill); color: var(--green);
+  box-shadow: inset 0 0 0 1px rgba(48,209,88,.35);
+}
+.cta.ghost.blue { color: var(--blue); box-shadow: inset 0 0 0 1px rgba(10,132,255,.4); }
+.cta.half { width: calc(50% - 5px); }
+.actions2 { display: flex; gap: 10px; margin-top: 12px; }
+
+/* ================= 结果组 ================= */
+.result { display: none; }
+.result.show { display: block; }
+.kv { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 16px; min-height: 42px; position: relative; }
+.kv + .kv::before { content: ""; position: absolute; top: 0; left: 16px; right: 0; height: 1px; background: var(--sep); }
+.kv .k { font-size: 14px; color: var(--label2); flex: 0 0 auto; }
+.kv .v { font-size: 14.5px; color: var(--label); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kv .v.mono { font-size: 13.5px; }
+
+/* 地图卡 */
+.mapcard { position: relative; height: 150px; overflow: hidden; border-radius: 26px; margin-bottom: 10px; }
+.mapcard svg.mapbg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.mapcard .pin { position: absolute; left: 56%; top: 44%; transform: translate(-50%,-100%); color: var(--green); }
+.mapcard .pin::after {
+  content: ""; position: absolute; left: 50%; bottom: -3px; transform: translateX(-50%);
+  width: 14px; height: 14px; border-radius: 50%; background: rgba(48,209,88,.4); animation: pulse 2s ease infinite;
+}
+@keyframes pulse { 0% { transform: translateX(-50%) scale(.6); opacity: 1; } 100% { transform: translateX(-50%) scale(2.4); opacity: 0; } }
+.mapcard .coords {
+  position: absolute; left: 10px; bottom: 10px; padding: 5px 10px; border-radius: 12px;
+  background: rgba(10,10,12,.5); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  color: #fff; font-size: 12px;
+}
+.phone-screen[data-theme="light"] .mapcard .coords { background: rgba(255,255,255,.6); color: #1c1c1e; }
+.mapcard .flagchip {
+  position: absolute; right: 10px; top: 10px; padding: 5px 10px; border-radius: 12px;
+  background: rgba(10,10,12,.5); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  color: #fff; font-size: 12px; font-weight: 700; letter-spacing: 1px;
+}
+.phone-screen[data-theme="light"] .mapcard .flagchip { background: rgba(255,255,255,.6); color: #1c1c1e; }
+
+/* 徽标 */
+.badge {
+  display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 999px;
+  font-size: 11.5px; font-weight: 600; letter-spacing: .3px;
+  background: rgba(255,159,10,.16); color: var(--orange);
+}
+.badge.ok { background: rgba(48,209,88,.16); color: var(--green); }
+.badge.info { background: rgba(10,132,255,.16); color: var(--blue); }
+
+/* ================= 扫描态 ================= */
+.scanpanel { display: none; padding: 22px 18px; }
+.scanpanel.show { display: block; }
+.ringwrap { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.ring { position: relative; width: 88px; height: 88px; }
+.ring svg { transform: rotate(-90deg); }
+.ring .ring-track { stroke: var(--fill); }
+.ring .ring-bar { stroke: var(--green); stroke-linecap: round; transition: stroke-dashoffset .3s ease; }
+.ring .rlabel { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 700; color: var(--label); font-variant-numeric: tabular-nums; }
+.scanmsg { font-size: 13px; color: var(--label2); min-height: 18px; text-align: center; }
+.scanbar { width: 100%; height: 5px; border-radius: 3px; background: var(--fill); overflow: hidden; }
+.scanbar i { display: block; height: 100%; width: 0%; background: var(--green); border-radius: 3px; transition: width .25s ease; }
+
+/* 平台网格 */
+.pgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.pcell {
+  border-radius: 14px; padding: 10px 6px 9px; text-align: center;
+  background: var(--fill); border: 1px solid transparent;
+  opacity: 0; transform: scale(.92); transition: opacity .25s ease, transform .25s ease;
+  min-width: 0; cursor: pointer;
+}
+.pcell.in { opacity: 1; transform: scale(1); }
+.pcell .pm {
+  width: 34px; height: 34px; margin: 0 auto 6px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px; font-weight: 700; color: var(--label2);
+  background: rgba(120,120,128,.18);
+}
+.pcell .pn { font-size: 11px; color: var(--label2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pcell .ps { margin-top: 5px; display: flex; justify-content: center; height: 14px; align-items: center; }
+.pcell.hit { background: rgba(48,209,88,.14); border-color: rgba(48,209,88,.4); }
+.pcell.hit .pm { background: var(--green); color: #04110a; }
+.pcell.hit .pn { color: var(--label); font-weight: 600; }
+.pcell.miss { opacity: .52; }
+.dotspin { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--label3); border-top-color: var(--green); animation: rot .7s linear infinite; }
+
+/* ================= 空状态 ================= */
+.emptybox { text-align: center; padding: 70px 30px 0; color: var(--label2); }
+.emptybox .eicon {
+  width: 64px; height: 64px; margin: 0 auto 16px; border-radius: 20px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--fill); color: var(--label3);
+}
+.emptybox h3 { font-size: 17px; font-weight: 600; color: var(--label); margin-bottom: 6px; }
+.emptybox p { font-size: 13.5px; line-height: 1.6; margin-bottom: 20px; }
+
+/* ================= Tab 栏（Liquid Glass 悬浮） ================= */
+.tabbar {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  bottom: 26px; z-index: 55;
+  display: flex; gap: 4px; padding: 5px; border-radius: 32px;
+  transition: padding .25s ease, bottom .25s ease, opacity .25s ease, transform .25s ease;
+}
+.tabbtn {
+  border: 0; background: none; cursor: pointer; font-family: inherit;
+  width: 92px; padding: 7px 0 5px; border-radius: 27px;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  color: var(--label2); transition: background .2s ease, color .2s ease;
+}
+.tabbtn .tl { font-size: 10px; font-weight: 600; letter-spacing: .2px; transition: opacity .2s ease; }
+.tabbtn.on { background: rgba(255,255,255,.14); color: var(--green); }
+.phone-screen[data-theme="light"] .tabbtn.on { background: rgba(0,0,0,.08); color: var(--green); }
+.scrolled .tabbar { bottom: 20px; }
+#screen.pushing .tabbar { opacity: 0; transform: translateX(-50%) translateY(14px); pointer-events: none; }
+.scrolled .tabbtn .tl { opacity: 0; height: 0; overflow: hidden; }
+
+/* ================= Toast / 弹窗 / 首启页 ================= */
+.toast {
+  position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%) translateY(14px);
+  z-index: 80; padding: 10px 18px; border-radius: 999px;
+  background: rgba(24,24,26,.78); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+  border: 1px solid rgba(255,255,255,.14); color: var(--label);
+  font-size: 14px; white-space: nowrap; opacity: 0; pointer-events: none;
+  transition: opacity .22s ease, transform .22s ease;
+}
+.phone-screen[data-theme="light"] .toast { background: rgba(255,255,255,.8); border-color: rgba(0,0,0,.06); color: #1c1c1e; box-shadow: 0 8px 24px rgba(0,0,0,.12); }
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+.scrim {
+  position: absolute; inset: 0; z-index: 90; display: none;
+  align-items: center; justify-content: center; padding: 40px;
+  background: rgba(0,0,0,.42);
+}
+.scrim.show { display: flex; }
+.alert { width: 100%; max-width: 300px; padding: 20px 18px 0; text-align: center; border-radius: 32px; }
+.alert h3 { font-size: 17px; font-weight: 600; color: var(--label); margin-bottom: 8px; }
+.alert p { font-size: 13.5px; line-height: 1.55; color: var(--label2); margin-bottom: 16px; }
+.alert .abtns { display: flex; border-top: 1px solid var(--sep); margin: 0 -18px; }
+.alert .abtns button {
+  flex: 1; height: 46px; border: 0; background: none; cursor: pointer; font-family: inherit;
+  font-size: 16px; color: var(--blue);
+}
+.alert .abtns button + button { border-left: 1px solid var(--sep); font-weight: 600; }
+.alert .abtns button.danger { color: var(--red); font-weight: 600; }
+.alert .abtns button:focus-visible { outline: -2px solid var(--green); outline-offset: -4px; }
+/* iOS 半屏 Sheet（使用声明）—— 层级高于首启页（100） */
+.sheetscrim { position: absolute; inset: 0; z-index: 105; display: flex; align-items: flex-end; background: rgba(0,0,0,.44); opacity: 0; visibility: hidden; transition: opacity .28s ease, visibility .28s; }
+.sheetscrim.show { opacity: 1; visibility: visible; }
+.sheet {
+  width: 100%; max-height: 72%; display: flex; flex-direction: column;
+  border-radius: 22px 22px 0 0; padding-bottom: 22px;
+  background: rgba(28,28,30,.72); -webkit-backdrop-filter: blur(24px) saturate(1.8); backdrop-filter: blur(24px) saturate(1.8);
+  border-top: 1px solid rgba(255,255,255,.14);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.16), 0 -12px 40px rgba(0,0,0,.5);
+  transform: translateY(100%); transition: transform .34s cubic-bezier(.32,.72,0,1);
+}
+.sheetscrim.show .sheet { transform: translateY(0); }
+.phone-screen[data-theme="light"] .sheet { background: rgba(250,250,252,.78); border-top-color: rgba(0,0,0,.06); box-shadow: inset 0 1px 0 rgba(255,255,255,.6), 0 -12px 40px rgba(0,0,0,.14); }
+.sheet .grabber { width: 36px; height: 5px; border-radius: 3px; background: var(--fill); margin: 8px auto 4px; flex: 0 0 auto; }
+.sheet .shead { display: flex; align-items: center; justify-content: space-between; padding: 8px 18px 10px; border-bottom: 1px solid var(--sep); flex: 0 0 auto; }
+.sheet .shead h3 { font-size: 17px; font-weight: 600; color: var(--label); }
+.sheet .sdone { border: 0; cursor: pointer; font-family: inherit; background: rgba(48,209,88,.16); color: var(--green); font-size: 13px; font-weight: 600; padding: 6px 14px; border-radius: 999px; }
+.sheet .sdone:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+.sheet .sbody { overflow-y: auto; padding: 12px 18px 6px; font-size: 13px; line-height: 1.7; color: var(--label2); }
+.sheet .sbody b { color: var(--label); }
+.sheet .sbody p { margin: 0 0 12px; }
+
+/* 首启合规页 */
+.onboard {
+  position: absolute; inset: 0; z-index: 100;
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+  padding: 0 22px 54px; text-align: center;
+  background: radial-gradient(140% 90% at 50% 0%, #0d1f18 0%, #050807 52%, #000 100%);
+  transition: opacity .5s ease, visibility .5s;
+}
+.phone-screen[data-theme="light"] .onboard { background: radial-gradient(140% 90% at 50% 0%, #eaf6ee 0%, #f2f2f7 55%, #e3e3e8 100%); }
+.onboard.hide { opacity: 0; visibility: hidden; }
+.onboard .omark { margin-bottom: 22px; color: var(--green); filter: drop-shadow(0 6px 24px rgba(48,209,88,.35)); }
+.onboard h1 { font-size: 34px; font-weight: 700; color: var(--label); letter-spacing: .3px; }
+.onboard .tagline { font-size: 15px; color: var(--label2); margin: 8px 0 30px; line-height: 1.6; }
+.onboard .points { width: 100%; margin-bottom: 30px; padding: 6px 0; }
+.onboard .pt { display: flex; align-items: center; gap: 12px; padding: 12px 18px; text-align: left; position: relative; }
+.onboard .pt + .pt::before { content: ""; position: absolute; top: 0; left: 50px; right: 0; height: 1px; background: var(--sep); }
+.onboard .pt .pi { color: var(--green); flex: 0 0 auto; display: flex; }
+.onboard .pt .ptt { font-size: 14px; color: var(--label); }
+.onboard .pt .pts { font-size: 12px; color: var(--label2); margin-top: 1px; }
+.onboard .agree { width: 100%; }
+.onboard .fulllegal {
+  border: 0; background: none; cursor: pointer; font-family: inherit;
+  color: var(--label2); font-size: 13px; margin-top: 16px; text-decoration: underline; text-underline-offset: 3px;
+}
+.onboard .fulllegal:focus-visible { outline: 2px solid var(--green); outline-offset: 3px; border-radius: 6px; }
+.onboard .ver { margin-top: 18px; font-size: 11px; color: var(--label3); letter-spacing: .5px; }
+
+/* 分段控件（外观切换） */
+.seg { display: flex; gap: 4px; padding: 3px; border-radius: 15px; background: var(--fill); margin: 10px 16px 14px; }
+.seg button {
+  flex: 1; height: 32px; border: 0; border-radius: 12px; cursor: pointer; font-family: inherit;
+  font-size: 13.5px; font-weight: 600; color: var(--label2); background: none;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  transition: background .2s ease, color .2s ease;
+}
+.seg button.on { background: rgba(255,255,255,.16); color: var(--label); box-shadow: 0 2px 8px rgba(0,0,0,.3); }
+.phone-screen[data-theme="light"] .seg button.on { background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+
+/* 首页大标题下的说明 */
+.homesub { font-size: 14px; color: var(--label2); margin: 6px 4px 0; line-height: 1.55; }
+
+/* 无障碍与降级 */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
+</style>
+</head>
+<body>
+
+<header class="page-head">
+  <h1>GTRACK · iOS 26 Liquid Glass 设计原型</h1>
+  <p>可点击交互 · 深色默认 · 设置页可实时切换浅色对照玻璃材质</p>
+</header>
+
+<div class="phone">
+  <div class="phone-screen" id="screen" data-theme="dark">
+    <div class="ambient"></div>
+    <div class="island"></div>
+    <div class="statusbar">
+      <span class="time">9:41</span>
+      <span class="glyphs">
+        <svg width="18" height="12" viewBox="0 0 18 12" fill="currentColor" aria-hidden="true"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="5" y="5" width="3" height="6" rx="1"/><rect x="10" y="2.5" width="3" height="8.5" rx="1"/><rect x="15" y="0" width="3" height="11" rx="1"/></svg>
+        <svg width="16" height="12" viewBox="0 0 16 12" fill="currentColor" aria-hidden="true"><path d="M8 9.6a1.4 1.4 0 1 1 0 2.8 1.4 1.4 0 0 1 0-2.8zM4.9 7.5a4.6 4.6 0 0 1 6.2 0l-1.2 1.3a2.9 2.9 0 0 0-3.8 0L4.9 7.5zM2 4.6a8.8 8.8 0 0 1 12 0l-1.2 1.3a7 7 0 0 0-9.6 0L2 4.6z"/></svg>
+        <svg width="25" height="12" viewBox="0 0 25 12" aria-hidden="true"><rect x="0.5" y="0.5" width="21" height="11" rx="3.5" fill="none" stroke="currentColor" opacity=".4"/><rect x="2" y="2" width="16" height="8" rx="2" fill="currentColor"/><path d="M23 4v4a2.2 2.2 0 0 0 0-4z" fill="currentColor" opacity=".4"/></svg>
+      </span>
+    </div>
+
+    <main class="views">
+
+      <!-- ============ TAB 1 · 侦查台 ============ -->
+      <section class="view root on" id="view-home" aria-label="侦查台">
+        <div class="navglass" id="nav-home"><span class="t">侦查台</span></div>
+        <div class="scroll" id="scroll-home">
+          <div style="display:flex; align-items:flex-end; justify-content:space-between;">
+            <h1 class="lg-title">侦查台</h1>
+            <button class="iconbtn" aria-label="查看使用声明" onclick="openLegal()">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3.5v5c0 4.6-3.2 8.2-8 9.5-4.8-1.3-8-4.9-8-9.5v-5L12 3z"/><path d="M9 12l2 2 4-4.5"/></svg>
+            </button>
+          </div>
+          <p class="homesub">公开信息核查与定位，查询行为仅存于本机。</p>
+
+          <div class="sec-head"><h2>本机 IP</h2><span class="badge info">示例</span></div>
+          <div class="glass group" style="display:flex; align-items:center; gap:12px; padding:13px 16px;">
+            <span class="row .ricon" style="width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;background:var(--blue);flex:0 0 auto;">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"><path d="M5 12.5a10 10 0 0 1 14 0M7.8 15.5a6 6 0 0 1 8.4 0"/><circle cx="12" cy="18.8" r="1.3" fill="#fff" stroke="none"/></svg>
+            </span>
+            <div style="flex:1; min-width:0;">
+              <div class="mono" id="myip" style="font-size:16px; color:var(--label);">198.51.100.24</div>
+              <div style="font-size:12px; color:var(--label2); margin-top:1px;">运营商网络 · 上海</div>
+            </div>
+            <button class="iconbtn" id="ipRefresh" aria-label="刷新本机 IP" onclick="refreshIp(this)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.2 6.6"/><path d="M20 5v6h-6"/></svg>
+            </button>
+          </div>
+
+          <div class="sec-head"><h2>侦查入口</h2></div>
+          <button class="cardbtn glass" style="--tint:#0a84ff;" onclick="openView('ip')">
+            <span class="cicon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16"/><circle cx="12" cy="12" r="2.6"/><path d="M6.5 12h2.9M14.6 12h2.9"/></svg>
+            </span>
+            <span class="cmain"><span class="ct">IP 定位</span><br><span class="cd">查询归属地、ASN 与运营商网络</span></span>
+            <span class="chev"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
+          </button>
+          <button class="cardbtn glass" style="--tint:#ff9f0a;" onclick="openView('phone')">
+            <span class="cicon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="3" width="10" height="18" rx="2.5"/><path d="M10.8 18.2h2.4"/></svg>
+            </span>
+            <span class="cmain"><span class="ct">手机号追踪</span><br><span class="cd">解析号码归属地与运营商</span></span>
+            <span class="chev"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
+          </button>
+          <button class="cardbtn glass" style="--tint:#bf5af2;" onclick="openView('username')">
+            <span class="cicon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="8" r="3.4"/><path d="M4.5 19.5c.7-3 2.9-4.8 5.5-4.8 1 0 2 .25 2.8.72"/><circle cx="16.4" cy="15.4" r="3"/><path d="M18.7 17.7L21 20"/></svg>
+            </span>
+            <span class="cmain"><span class="ct">用户名扫描</span><br><span class="cd">一次核查 23 个社交平台的同名账号</span></span>
+            <span class="chev"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
+          </button>
+
+          <div class="sec-head">
+            <h2>最近侦查</h2>
+            <button onclick="tabTo('history')">查看全部</button>
+          </div>
+          <div class="glass group" id="recentList"></div>
+
+          <p style="text-align:center; font-size:11px; color:var(--label3); margin-top:22px; line-height:1.6;">仅供合法授权的安全调查与信息核实<br>基于开源项目 GhostTrack 二次开发 · 演示原型</p>
+        </div>
+      </section>
+
+      <!-- ============ TAB 2 · 记录 ============ -->
+      <section class="view root" id="view-history" aria-label="侦查记录">
+        <div class="navglass" id="nav-history"><span class="t">记录</span></div>
+        <div class="scroll" id="scroll-history">
+          <h1 class="lg-title">记录</h1>
+          <div id="historyBody"></div>
+        </div>
+      </section>
+
+      <!-- ============ TAB 3 · 设置 ============ -->
+      <section class="view root" id="view-settings" aria-label="设置">
+        <div class="navglass" id="nav-settings"><span class="t">设置</span></div>
+        <div class="scroll" id="scroll-settings">
+          <h1 class="lg-title">设置</h1>
+
+          <div class="sec-head"><h2>外观</h2></div>
+          <div class="glass" style="border-radius:20px;">
+            <div class="seg" role="tablist" aria-label="外观模式">
+              <button id="segDark" class="on" role="tab" aria-selected="true" onclick="setTheme('dark')">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M20 13.5A8.5 8.5 0 0 1 10.5 4 8.5 8.5 0 1 0 20 13.5z"/></svg>深色
+              </button>
+              <button id="segLight" role="tab" aria-selected="false" onclick="setTheme('light')">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.4M12 19.1v2.4M2.5 12h2.4M19.1 12h2.4M4.9 4.9l1.7 1.7M17.4 17.4l1.7 1.7M19.1 4.9l-1.7 1.7M6.6 17.4l-1.7 1.7"/></svg>浅色
+              </button>
+            </div>
+          </div>
+
+          <div class="sec-head"><h2>数据源</h2></div>
+          <div class="glass group">
+            <button class="row" onclick="toast('完整版支持配置私有 API 密钥')">
+              <span class="rmain"><span class="rt">IPWHO.IS 接口</span><span class="rs">IP 归属与 ASN 数据</span></span>
+              <span style="font-size:13px;color:var(--label2);">公共接口</span>
+              <span class="chev"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
+            </button>
+            <button class="row" onclick="toast('phonenumbers 解析引擎 · v2.2.9')">
+              <span class="rmain"><span class="rt">号码解析引擎</span><span class="rs">归属地 / 运营商 / 线路类型</span></span>
+              <span style="font-size:13px;color:var(--label2);">v2.2.9</span>
+              <span class="chev"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
+            </button>
+          </div>
+
+          <div class="sec-head"><h2>数据</h2></div>
+          <div class="glass group">
+            <button class="row" onclick="openConfirm()">
+              <span class="rmain"><span class="rt" style="color:var(--red);">清除全部记录</span><span class="rs">删除本机保存的侦查历史</span></span>
+              <span class="chev" style="color:var(--red);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
+            </button>
+          </div>
+
+          <div class="sec-head"><h2>合规</h2></div>
+          <div class="glass group">
+            <button class="row" onclick="openLegal()">
+              <span class="rmain"><span class="rt">使用声明</span><span class="rs">合法授权与数据边界</span></span>
+              <span class="chev"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
+            </button>
+          </div>
+
+          <div class="sec-head" id="debugHead" style="display:none;"><h2>调试</h2></div>
+          <div class="glass group" id="debugGroup" style="display:none;">
+            <button class="row" onclick="toast('上游项目：github.com/HunxByts/GhostTrack')">
+              <span class="rmain"><span class="rt">致谢开源上游</span><span class="rs">GhostTrack by HunxByts · v2.2</span></span>
+              <span class="chev"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M9 7h8v8"/></svg></span>
+            </button>
+          </div>
+
+          <button class="verfoot" id="verFoot" onclick="tapVersion()">GTRACK App · 版本 2.2.0 (iOS 26 设计原型)</button>
+        </div>
+      </section>
+
+      <!-- ============ PUSH · IP 定位 ============ -->
+      <section class="view push" id="view-ip" aria-label="IP 定位">
+        <div class="pushbar">
+          <button class="backbtn" onclick="goBack()">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 5.5L8 12l6.5 6.5"/></svg>返回
+          </button>
+          <span class="t">IP 定位</span>
+        </div>
+        <div class="scroll">
+          <div class="field">
+            <label for="ipInput">目标 IP 地址</label>
+            <input class="inp mono" id="ipInput" placeholder="1.1.1.1" inputmode="decimal" maxlength="15" autocomplete="off" spellcheck="false" aria-describedby="ipErr">
+            <p class="errline" id="ipErr" role="alert"></p>
+          </div>
+          <button class="cta" id="ipBtn" onclick="runIp()" disabled>开始追踪</button>
+
+          <div class="glass scanpanel" id="ipScan" style="margin-top:18px;">
+            <div class="ringwrap">
+              <div class="ring">
+                <svg width="88" height="88"><circle class="ring-track" cx="44" cy="44" r="38" fill="none" stroke-width="5"/><circle class="ring-bar" id="ipRing" cx="44" cy="44" r="38" fill="none" stroke-width="5" stroke-dasharray="238.76" stroke-dashoffset="238.76"/></svg>
+                <span class="rlabel" id="ipPct">0%</span>
+              </div>
+              <div class="scanmsg" id="ipMsg">正在建立连接…</div>
+              <div class="scanbar"><i id="ipBar"></i></div>
+            </div>
+          </div>
+
+          <div class="result" id="ipResult" style="margin-top:18px;">
+            <div class="glass mapcard">
+              <svg class="mapbg" viewBox="0 0 340 150" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+                <rect width="340" height="150" fill="#0e1a16"/>
+                <g stroke="#1c3a30" stroke-width="1.4">
+                  <path d="M-10 40 H350 M-10 84 H350 M-10 122 H350"/>
+                  <path d="M56 -10 V160 M132 -10 V160 M210 -10 V160 M286 -10 V160"/>
+                  <path d="M-10 20 L120 150 M330 -10 L190 160"/>
+                </g>
+                <g stroke="#274c3e" stroke-width="3" opacity=".7">
+                  <path d="M-10 62 H350"/><path d="M96 -10 V160"/><path d="M252 -10 V160"/>
+                </g>
+                <circle cx="190" cy="66" r="26" fill="rgba(48,209,88,.10)"/>
+              </svg>
+              <span class="pin">
+                <svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a7 7 0 0 0-7 7c0 4.9 5.1 10.6 6.5 12 .3.3.7.3 1 0C13.9 19.6 19 13.9 19 9a7 7 0 0 0-7-7zm0 9.6A2.6 2.6 0 1 1 12 6.4a2.6 2.6 0 0 1 0 5.2z"/></svg>
+              </span>
+              <span class="flagchip mono" id="ipFlag">US</span>
+              <span class="coords mono" id="ipCoords">34.0522, -118.2437</span>
+            </div>
+
+            <div class="sec-head" style="margin-top:16px;"><h2>位置信息</h2><span class="badge">示例数据</span></div>
+            <div class="glass group" id="ipGeo"></div>
+
+            <div class="sec-head"><h2>网络信息</h2></div>
+            <div class="glass group" id="ipNet"></div>
+
+            <div class="actions2">
+              <button class="cta ghost blue half" onclick="toast('演示环境未接入外部地图')">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M9 7h8v8"/></svg>在地图中打开
+              </button>
+              <button class="cta ghost half" onclick="copyText(currentIpData.coords, this)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M5 15H4.5A1.5 1.5 0 0 1 3 13.5v-9A1.5 1.5 0 0 1 4.5 3h9A1.5 1.5 0 0 1 15 4.5V5"/></svg>复制坐标
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ PUSH · 手机号追踪 ============ -->
+      <section class="view push" id="view-phone" aria-label="手机号追踪">
+        <div class="pushbar">
+          <button class="backbtn" onclick="goBack()">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 5.5L8 12l6.5 6.5"/></svg>返回
+          </button>
+          <span class="t">手机号追踪</span>
+        </div>
+        <div class="scroll">
+          <div class="field">
+            <label for="phInput">目标号码</label>
+            <div class="fwrap">
+              <button class="ccprefix mono" onclick="toast('完整版支持 200+ 区号选择')">+1
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9.5l6 6 6-6"/></svg>
+              </button>
+              <input class="inp mono" id="phInput" placeholder="415 555 0132" inputmode="tel" maxlength="18" autocomplete="off" spellcheck="false" aria-describedby="phErr">
+            </div>
+            <p class="errline" id="phErr" role="alert"></p>
+          </div>
+          <button class="cta" id="phBtn" onclick="runPhone()" disabled>开始追踪</button>
+
+          <div class="glass scanpanel" id="phScan" style="margin-top:18px;">
+            <div class="ringwrap">
+              <div class="ring">
+                <svg width="88" height="88"><circle class="ring-track" cx="44" cy="44" r="38" fill="none" stroke-width="5"/><circle class="ring-bar" id="phRing" cx="44" cy="44" r="38" fill="none" stroke-width="5" stroke-dasharray="238.76" stroke-dashoffset="238.76"/></svg>
+                <span class="rlabel" id="phPct">0%</span>
+              </div>
+              <div class="scanmsg" id="phMsg">正在解析号码结构…</div>
+              <div class="scanbar"><i id="phBar"></i></div>
+            </div>
+          </div>
+
+          <div class="result" id="phResult" style="margin-top:18px;">
+            <div class="glass" style="padding:18px 16px; display:flex; align-items:center; gap:14px;">
+              <span class="mono" style="width:46px;height:46px;border-radius:14px;background:rgba(255,159,10,.16);color:var(--orange);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;letter-spacing:.5px;" id="phFlag">US</span>
+              <div style="flex:1;min-width:0;">
+                <div class="mono" id="phFmtBig" style="font-size:19px;font-weight:700;color:var(--label);">+1 415 555 0132</div>
+                <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">
+                  <span class="badge ok" id="phValid"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12.5l5 5 10-11"/></svg>号码有效</span>
+                  <span class="badge">示例数据</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="sec-head"><h2>归属信息</h2></div>
+            <div class="glass group" id="phInfo"></div>
+
+            <div class="sec-head"><h2>号码格式</h2></div>
+            <div class="glass group" id="phFormats"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ PUSH · 用户名扫描 ============ -->
+      <section class="view push" id="view-username" aria-label="用户名扫描">
+        <div class="pushbar">
+          <button class="backbtn" onclick="goBack()">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 5.5L8 12l6.5 6.5"/></svg>返回
+          </button>
+          <span class="t">用户名扫描</span>
+        </div>
+        <div class="scroll">
+          <div class="field">
+            <label for="unInput">目标用户名</label>
+            <input class="inp mono" id="unInput" placeholder="username" maxlength="30" autocomplete="off" spellcheck="false" aria-describedby="unErr">
+            <p class="errline" id="unErr" role="alert"></p>
+          </div>
+          <button class="cta" id="unBtn" onclick="runUser()" disabled>开始扫描</button>
+
+          <div id="unScan" style="display:none; margin-top:18px;">
+            <div class="glass" style="padding:14px 16px; display:flex; align-items:center; gap:12px;">
+              <span class="dotspin" style="flex:0 0 auto;"></span>
+              <div style="flex:1;">
+                <div style="font-size:14px; color:var(--label);" id="unCount">已扫描 0/23 个平台</div>
+                <div class="scanbar" style="margin-top:8px;"><i id="unBar"></i></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="pgrid" id="unGrid" style="display:none; margin-top:10px;"></div>
+
+          <div class="result" id="unResult" style="margin-top:18px;">
+            <div class="glass" style="padding:16px; display:flex; align-items:center; gap:12px;">
+              <span style="width:40px;height:40px;border-radius:13px;background:rgba(48,209,88,.16);color:var(--green);display:flex;align-items:center;justify-content:center;flex:0 0 auto;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12.5l5 5 10-11"/></svg>
+              </span>
+              <div style="flex:1;min-width:0;">
+                <div style="font-size:16px;font-weight:600;color:var(--label);"><span class="mono" id="unName">username</span> · <span style="color:var(--green);" id="unHits">7</span> 个平台命中</div>
+                <div style="font-size:12px;color:var(--label2);margin-top:2px;">点击命中卡片可查看对应平台链接</div>
+              </div>
+              <span class="badge">示例数据</span>
+            </div>
+            <button class="cta ghost" style="margin-top:12px;" onclick="copyText('已保存至侦查记录（演示）', this)">保存至记录</button>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Tab 栏 -->
+    <nav class="tabbar glass" aria-label="主导航">
+      <button class="tabbtn on" id="tab-home" onclick="tabTo('home')" aria-label="侦查台">
+        <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16"/><circle cx="12" cy="12" r="2.4"/><path d="M6.5 12h3.1M14.4 12h3.1"/></svg>
+        <span class="tl">侦查</span>
+      </button>
+      <button class="tabbtn" id="tab-history" onclick="tabTo('history')" aria-label="记录">
+        <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>
+        <span class="tl">记录</span>
+      </button>
+      <button class="tabbtn" id="tab-settings" onclick="tabTo('settings')" aria-label="设置">
+        <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 4.6v-2M12 21.4v-2M19.4 12h2M2.6 12h2M17.2 6.8l1.4-1.4M5.4 18.6l1.4-1.4M17.2 17.2l1.4 1.4M5.4 5.4l1.4 1.4"/></svg>
+        <span class="tl">设置</span>
+      </button>
+    </nav>
+
+    <div class="homebar"></div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast" role="status"></div>
+
+    <!-- 确认弹窗：清除记录 -->
+    <div class="scrim" id="confirmScrim">
+      <div class="alert glass" role="alertdialog" aria-modal="true" aria-labelledby="cfTitle">
+        <h3 id="cfTitle">清除全部侦查记录？</h3>
+        <p>将删除保存在本机的所有历史查询，操作不可撤销。</p>
+        <div class="abtns">
+          <button onclick="closeConfirm()">取消</button>
+          <button class="danger" onclick="clearHistory()">清除</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 使用声明 · 半屏 Sheet（层级高于首启页） -->
+    <div class="sheetscrim" id="legalScrim" onclick="closeLegal()">
+      <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="lgTitle" onclick="event.stopPropagation()">
+        <div class="grabber" aria-hidden="true"></div>
+        <div class="shead">
+          <h3 id="lgTitle">使用声明</h3>
+          <button class="sdone" onclick="closeLegal()">完成</button>
+        </div>
+        <div class="sbody">
+          <p><b>用途边界</b><br>本工具仅限用于合法授权的安全调查、失联亲友协寻、资产核实与公开信息研究。使用者需对自身查询行为承担全部法律责任。</p>
+          <p><b>数据来源</b><br>所有查询结果均来自公开数据接口与公开网页，本工具不入侵、不监听、不获取任何非公开数据。</p>
+          <p><b>数据留存</b><br>查询记录默认仅保存在设备本地，可随时在「设置」中一键清除。</p>
+          <p><b>禁止行为</b><br>严禁用于跟踪骚扰、人肉搜索、电信诈骗或其他违法用途。发现滥用请立即停止使用。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 首启合规页 -->
+    <div class="onboard" id="onboard">
+      <div class="omark">
+        <svg width="86" height="86" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.2c-3.1 0-5.4 2.4-5.4 5.6v4.4c0 .9-.5 1.9-1.3 3.1-.5.8-.8 1.4-.8 1.8 0 .8.6 1.2 1.6 1.2h11.8c1 0 1.6-.4 1.6-1.2 0-.4-.3-1-.8-1.8-.8-1.2-1.3-2.2-1.3-3.1V8.8c0-3.2-2.3-5.6-5.4-5.6z"/><path d="M10 20.4c.4.9 1.1 1.4 2 1.4s1.6-.5 2-1.4M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8"/></svg>
+      </div>
+      <h1>GTRACK</h1>
+      <p class="tagline">合法授权下的公开信息核查工具<br>IP 定位 · 号码解析 · 用户名跨平台核查</p>
+      <div class="points glass">
+        <div class="pt">
+          <span class="pi"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3.5v5c0 4.6-3.2 8.2-8 9.5-4.8-1.3-8-4.9-8-9.5v-5L12 3z"/><path d="M9 12l2 2 4-4.5"/></svg></span>
+          <span><span class="ptt">仅限合法授权调查</span><br><span class="pts">启动即视为承诺遵守当地法律法规</span></span>
+        </div>
+        <div class="pt">
+          <span class="pi"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3.5 9h17M3.5 15h17M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></svg></span>
+          <span><span class="ptt">只查公开数据源</span><br><span class="pts">公开接口与公开网页，不涉非公开数据</span></span>
+        </div>
+        <div class="pt">
+          <span class="pi"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"/><rect x="9" y="9" width="6" height="6" rx="1.5"/></svg></span>
+          <span><span class="ptt">记录仅存本机</span><br><span class="pts">不上传云端，可随时一键清除</span></span>
+        </div>
+      </div>
+      <button class="cta agree" onclick="agreeOnboard()">同意并进入</button>
+      <button class="fulllegal" onclick="openLegal()">查看完整使用声明</button>
+      <p class="ver">GTRACK APP · V2.2.0 · iOS 26 设计原型</p>
+    </div>
+
+  </div>
+</div>
+
+<p class="page-foot">
+  演示数据说明：查询结果均为示例（IP 采用 RFC 5737 文档地址段），仅展示界面结构与状态流转。<br>
+  SwiftUI 实现注记：NavigationStack + navigationDestination 页面栈 · @Observable 视图模型 · Tab 栏用原生 TabView(minimizeBehavior)。
+</p>
+
+<script>
+/* ============ 图标（SF Symbols 风格线稿，内联 SVG） ============ */
+const IC = {
+  ip: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16"/><circle cx="12" cy="12" r="2.6"/><path d="M6.5 12h2.9M14.6 12h2.9"/></svg>',
+  phone: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="3" width="10" height="18" rx="2.5"/><path d="M10.8 18.2h2.4"/></svg>',
+  user: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="8" r="3.4"/><path d="M4.5 19.5c.7-3 2.9-4.8 5.5-4.8 1 0 2 .25 2.8.72"/><circle cx="16.4" cy="15.4" r="3"/><path d="M18.7 17.7L21 20"/></svg>',
+  chev: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>',
+  check: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12.5l5 5 10-11"/></svg>',
+  minus: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 12h12"/></svg>',
+  copy: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M5 15H4.5A1.5 1.5 0 0 1 3 13.5v-9A1.5 1.5 0 0 1 4.5 3h9A1.5 1.5 0 0 1 15 4.5V5"/></svg>',
+  ext: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M9 7h8v8"/></svg>'
+};
+const TYPE_META = {
+  ip:     { label: 'IP 定位',   icon: IC.ip,     bg: 'var(--blue)' },
+  phone:  { label: '手机号',    icon: IC.phone,  bg: 'var(--orange)' },
+  username:{ label: '用户名',   icon: IC.user,   bg: '#bf5af2' }
+};
+
+/* ============ 演示数据（RFC 5737 文档地址段，明确标注示例） ============ */
+const IP_DB = {
+  '1.1.1.1': { flag:'US', city:'洛杉矶', country:'美国', continent:'北美洲', zip:'90001', tz:'America/Los_Angeles', local:'18:42 (UTC-8)', coords:'34.0522, -118.2437', asn:'AS14061', isp:'DigitalOcean, LLC', org:'DigitalOcean', domain:'digitalocean.com' },
+  '198.51.100.7': { flag:'DE', city:'法兰克福', country:'德国', continent:'欧洲', zip:'60313', tz:'Europe/Berlin', local:'03:42 (UTC+1)', coords:'50.1109, 8.6821', asn:'AS24940', isp:'Hetzner Online GmbH', org:'Hetzner', domain:'hetzner.com' }
+};
+const IP_FALLBACK = IP_DB['1.1.1.1'];
+const PHONE_DB = {
+  default: { flag:'US', big:'+1 415 555 0132', region:'旧金山，加利福尼亚', carrier:'T-Mobile US', type:'移动号码', tz:'America/Los_Angeles', e164:'+14155550132', intl:'+1 415-555-0132', local:'(415) 555-0132', valid:true }
+};
+const PLATFORMS = [
+  ['Facebook','F'],['Twitter','X'],['Instagram','In'],['LinkedIn','Li'],['GitHub','Gh'],
+  ['Pinterest','P'],['Tumblr','Tu'],['YouTube','Yo'],['SoundCloud','Sc'],['Snapchat','Sn'],
+  ['TikTok','Tt'],['Behance','Be'],['Medium','M'],['Quora','Q'],['Flickr','Fl'],
+  ['Periscope','Pe'],['Twitch','Tw'],['Dribbble','Dr'],['StumbleUpon','St'],['Ello','El'],
+  ['Product Hunt','Ph'],['Telegram','Te'],['We Heart It','W']
+];
+const HITS = new Set(['GitHub','Instagram','Telegram','Medium','Twitch','SoundCloud','TikTok']);
+const PL_URL = { 'GitHub':'github.com', 'Twitter':'x.com', 'Instagram':'instagram.com', 'LinkedIn':'linkedin.com', 'Pinterest':'pinterest.com', 'Tumblr':'tumblr.com', 'YouTube':'youtube.com', 'SoundCloud':'soundcloud.com', 'Snapchat':'snapchat.com', 'TikTok':'tiktok.com', 'Behance':'behance.net', 'Medium':'medium.com', 'Quora':'quora.com', 'Flickr':'flickr.com', 'Periscope':'pscp.tv', 'Twitch':'twitch.tv', 'Dribbble':'dribbble.com', 'StumbleUpon':'stumbleupon.com', 'Ello':'ello.co', 'Product Hunt':'producthunt.com', 'Telegram':'t.me', 'Facebook':'facebook.com', 'We Heart It':'weheartit.com' };
+
+/* ============ 侦查记录（本地演示数据） ============ */
+let history = [
+  { type:'ip', value:'1.1.1.1', time:'12 分钟前', sub:'美国 · 洛杉矶' },
+  { type:'phone', value:'+1 415 555 0132', time:'1 小时前', sub:'T-Mobile US · 有效' },
+  { type:'username', value:'username', time:'昨天', sub:'7 个平台命中' },
+  { type:'ip', value:'198.51.100.7', time:'3 天前', sub:'德国 · 法兰克福' }
+];
+
+/* ============ 导航 ============ */
+let currentTab = 'home';
+let pushStack = [];
+function tabTo(name) {
+  pushStack = [];
+  currentTab = name;
+  ['home','history','settings'].forEach(n => {
+    document.getElementById('view-' + n).classList.toggle('on', n === name);
+    document.getElementById('tab-' + n).classList.toggle('on', n === name);
+  });
+  renderHistory();
+}
+function openView(name, prefill) {
+  const v = document.getElementById('view-' + name);
+  if (!v.classList.contains('on')) {
+    pushStack.push(name); v.classList.add('on');
+    document.getElementById('screen').classList.add('pushing');
+    setTimeout(() => {
+      if (v.classList.contains('on')) {
+        document.querySelectorAll('.view.root.on').forEach(r => r.classList.add('ghost'));
+      }
+    }, 340);
+  }
+  if (prefill) prefill();
+}
+function goBack() {
+  const name = pushStack.pop();
+  if (name) {
+    const v = document.getElementById('view-' + name);
+    if (name === 'ip') stopIpScan();
+    if (name === 'phone') stopPhoneScan();
+    if (name === 'username') stopUnScan();
+    document.querySelectorAll('.view.root.on').forEach(r => r.classList.remove('ghost'));
+    v.classList.remove('on');
+    if (!pushStack.length) document.getElementById('screen').classList.remove('pushing');
+  }
+}
+
+/* ============ Toast ============ */
+let toastTimer;
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+}
+function copyText(text, btn) {
+  if (navigator.clipboard) navigator.clipboard.writeText(text).catch(()=>{});
+  toast('已拷贝：' + (text.length > 24 ? text.slice(0, 24) + '…' : text));
+}
+
+/* ============ 首启合规页 ============ */
+function agreeOnboard() {
+  document.getElementById('onboard').classList.add('hide');
+  setTimeout(() => { document.getElementById('onboard').style.display = 'none'; }, 550);
+}
+function openLegal() { document.getElementById('legalScrim').classList.add('show'); }
+function closeLegal() { document.getElementById('legalScrim').classList.remove('show'); }
+
+/* ============ 调试入口（连点版本号 5 次） ============ */
+let dbgTaps = 0, dbgOn = false, dbgTimer;
+function tapVersion() {
+  if (dbgOn) { toast('调试模式开启中'); return; }
+  dbgTaps++;
+  clearTimeout(dbgTimer);
+  dbgTimer = setTimeout(() => { dbgTaps = 0; }, 1600);
+  const left = 5 - dbgTaps;
+  if (left > 0) toast(`再点 ${left} 次进入调试模式`);
+  else {
+    dbgOn = true;
+    document.getElementById('debugHead').style.display = 'flex';
+    document.getElementById('debugGroup').style.display = 'block';
+    toast('已进入调试模式');
+  }
+}
+
+/* ============ 确认弹窗 ============ */
+function openConfirm() { document.getElementById('confirmScrim').classList.add('show'); }
+function closeConfirm() { document.getElementById('confirmScrim').classList.remove('show'); }
+function clearHistory() {
+  history = [];
+  closeConfirm();
+  renderHistory();
+  toast('已清除全部记录');
+}
+
+/* ============ 主题 ============ */
+function setTheme(mode) {
+  document.getElementById('screen').setAttribute('data-theme', mode);
+  document.getElementById('segDark').classList.toggle('on', mode === 'dark');
+  document.getElementById('segLight').classList.toggle('on', mode === 'light');
+  document.getElementById('segDark').setAttribute('aria-selected', mode === 'dark');
+  document.getElementById('segLight').setAttribute('aria-selected', mode === 'light');
+}
+
+/* ============ 本机 IP 刷新（演示） ============ */
+function refreshIp(btn) {
+  btn.classList.remove('spin'); void btn.offsetWidth; btn.classList.add('spin');
+  setTimeout(() => toast('已刷新（演示环境为静态示例）'), 800);
+}
+
+/* ============ 记录渲染 ============ */
+function renderHistory() {
+  const body = document.getElementById('historyBody');
+  const recent = document.getElementById('recentList');
+  if (!history.length) {
+    body.innerHTML = `
+      <div class="emptybox">
+        <div class="eicon"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg></div>
+        <h3>还没有侦查记录</h3>
+        <p>在侦查台发起的每一次查询<br>都会自动保存在这里，随时回查。</p>
+        <button class="cta ghost" onclick="tabTo('home')">去侦查台</button>
+      </div>`;
+    recent.innerHTML = `<div style="padding:16px; font-size:13.5px; color:var(--label3); text-align:center;">暂无记录</div>`;
+    return;
+  }
+  body.innerHTML = ['ip','phone','username'].map(t => {
+    const rows = history.filter(h => h.type === t);
+    if (!rows.length) return '';
+    return `<div class="sec-head"><h2>${TYPE_META[t].label}</h2></div>
+      <div class="glass group">${rows.map(h => `
+        <button class="row" onclick="recall('${t}', '${h.value.replace(/'/g,'')}')">
+          <span class="ricon" style="background:${TYPE_META[t].bg};">${TYPE_META[t].icon}</span>
+          <span class="rmain"><span class="rt mono">${h.value}</span><span class="rs">${h.sub} · ${h.time}</span></span>
+          <span class="chev">${IC.chev}</span>
+        </button>`).join('')}
+      </div>`;
+  }).join('');
+  recent.innerHTML = history.slice(0, 3).map(h => `
+    <button class="row" onclick="recall('${h.type}', '${h.value.replace(/'/g,'')}')">
+      <span class="ricon" style="background:${TYPE_META[h.type].bg};">${TYPE_META[h.type].icon}</span>
+      <span class="rmain"><span class="rt mono">${h.value}</span><span class="rs">${TYPE_META[h.type].label} · ${h.time}</span></span>
+      <span class="chev">${IC.chev}</span>
+    </button>`).join('');
+}
+function recall(type, value) {
+  if (type === 'ip') {
+    openView('ip', () => { document.getElementById('ipInput').value = value; runIp(true); });
+  } else if (type === 'phone') {
+    openView('phone', () => { document.getElementById('phInput').value = value.replace('+1 ', ''); runPhone(true); });
+  } else {
+    openView('username', () => { document.getElementById('unInput').value = value; runUser(true); });
+  }
+}
+
+/* ============ IP 定位 ============ */
+const ipv4 = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
+let ipTimers = [], currentIpData = { coords: '' };
+document.getElementById('ipInput').addEventListener('input', function() {
+  clearIpErr();
+  document.getElementById('ipBtn').disabled = !ipv4.test(this.value.trim());
+});
+document.getElementById('ipInput').addEventListener('blur', function() {
+  const v = this.value.trim();
+  if (v && !ipv4.test(v)) showIpErr('IP 格式不正确。请检查是否有缺失的数字段，示例：1.1.1.1');
+});
+function showIpErr(msg) {
+  const e = document.getElementById('ipErr');
+  e.textContent = msg; e.classList.add('show');
+  document.getElementById('ipInput').classList.add('err');
+}
+function clearIpErr() {
+  const e = document.getElementById('ipErr');
+  e.classList.remove('show');
+  document.getElementById('ipInput').classList.remove('err');
+}
+function kvRows(pairs) {
+  return pairs.map(([k, v, mono]) => `<div class="kv"><span class="k">${k}</span><span class="v ${mono ? 'mono' : ''}">${v}</span></div>`).join('');
+}
+function runIp(silent) {
+  const inp = document.getElementById('ipInput');
+  const v = inp.value.trim();
+  if (!ipv4.test(v)) {
+    showIpErr('IP 格式不正确。请检查是否有缺失的数字段，示例：1.1.1.1');
+    inp.focus();
+    return;
+  }
+  clearIpErr();
+  document.getElementById('ipResult').classList.remove('show');
+  const btn = document.getElementById('ipBtn');
+  btn.disabled = true; btn.textContent = '追踪中…';
+  document.getElementById('ipScan').classList.add('show');
+  const steps = ['正在解析 ASN…', '正在查询归属地…', '正在匹配时区…', '正在整理结果…'];
+  let p = 0;
+  const ring = document.getElementById('ipRing'), pct = document.getElementById('ipPct'), bar = document.getElementById('ipBar'), msg = document.getElementById('ipMsg');
+  msg.textContent = steps[0];
+  ipTimers.push(setInterval(() => {
+    p += 8 + Math.floor(Math.random() * 7);
+    if (p >= 100) { p = 100; finishIp(v, btn); }
+    ring.style.strokeDashoffset = 238.76 * (1 - p / 100);
+    pct.textContent = p + '%';
+    bar.style.width = p + '%';
+    msg.textContent = steps[Math.min(3, Math.floor(p / 28))];
+  }, silent ? 130 : 210));
+}
+function stopIpScan() { ipTimers.forEach(clearInterval); ipTimers = []; }
+function finishIp(v, btn) {
+  stopIpScan();
+  btn.disabled = false; btn.textContent = '开始追踪';
+  document.getElementById('ipScan').classList.remove('show');
+  const res = document.getElementById('ipResult');
+  if (v === '127.0.0.1') {
+    res.innerHTML = `
+      <div class="glass" style="padding:22px 18px; text-align:center;">
+        <div style="width:52px;height:52px;margin:0 auto 12px;border-radius:16px;background:rgba(255,159,10,.16);color:var(--orange);display:flex;align-items:center;justify-content:center;">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v5M12 16.5v.5"/><circle cx="12" cy="12" r="9"/></svg>
+        </div>
+        <div style="font-size:16px;font-weight:600;color:var(--label);">保留地址，无公网归属</div>
+        <p style="font-size:13.5px;color:var(--label2);line-height:1.6;margin-top:6px;">127.0.0.1 是本机回环地址，不经过公网路由，因此无法解析归属地。请输入公网 IP 重试。</p>
+        <button class="cta ghost" style="margin-top:14px;" onclick="document.getElementById('ipResult').classList.remove('show');document.getElementById('ipInput').focus();">重新输入</button>
+      </div>`;
+    res.classList.add('show');
+    return;
+  }
+  const d = IP_DB[v] || IP_FALLBACK;
+  currentIpData = d;
+  document.getElementById('ipFlag').textContent = d.flag;
+  document.getElementById('ipCoords').textContent = d.coords;
+  document.getElementById('ipGeo').innerHTML = kvRows([
+    ['国家 / 地区', d.country], ['城市', d.city], ['大洲', d.continent],
+    ['邮编', d.zip, 1], ['时区', d.tz, 1], ['当地时间', d.local]
+  ]);
+  document.getElementById('ipNet').innerHTML = kvRows([
+    ['ASN', d.asn, 1], ['ISP', d.isp], ['所属组织', d.org], ['域名', d.domain, 1]
+  ]);
+  res.classList.add('show');
+  if (!history.some(h => h.type === 'ip' && h.value === v)) {
+    history.unshift({ type:'ip', value:v, time:'刚刚', sub:`${d.country} · ${d.city}` });
+  }
+}
+
+/* ============ 手机号追踪 ============ */
+let phTimers = [];
+const phInput = document.getElementById('phInput');
+phInput.addEventListener('input', function() {
+  clearPhErr();
+  document.getElementById('phBtn').disabled = this.value.replace(/\D/g, '').length < 7;
+});
+phInput.addEventListener('blur', function() {
+  const d = this.value.replace(/\D/g, '');
+  if (d.length > 0 && d.length < 7) showPhErr('号码不完整，请输入完整号码。示例：415 555 0132');
+});
+function showPhErr(msg) {
+  const e = document.getElementById('phErr');
+  e.textContent = msg; e.classList.add('show');
+  phInput.classList.add('err');
+}
+function clearPhErr() {
+  const e = document.getElementById('phErr');
+  e.classList.remove('show');
+  phInput.classList.remove('err');
+}
+function runPhone(silent) {
+  const d = phInput.value.replace(/\D/g, '');
+  if (d.length < 7) {
+    showPhErr('号码不完整，请输入完整号码。示例：415 555 0132');
+    phInput.focus();
+    return;
+  }
+  clearPhErr();
+  document.getElementById('phResult').classList.remove('show');
+  const btn = document.getElementById('phBtn');
+  btn.disabled = true; btn.textContent = '追踪中…';
+  document.getElementById('phScan').classList.add('show');
+  const steps = ['正在解析号码结构…', '正在查询运营商…', '正在匹配归属地…'];
+  let p = 0;
+  const ring = document.getElementById('phRing'), pct = document.getElementById('phPct'), bar = document.getElementById('phBar'), msg = document.getElementById('phMsg');
+  msg.textContent = steps[0];
+  phTimers.push(setInterval(() => {
+    p += 12 + Math.floor(Math.random() * 9);
+    if (p >= 100) { p = 100; finishPhone(d, btn); }
+    ring.style.strokeDashoffset = 238.76 * (1 - p / 100);
+    pct.textContent = p + '%';
+    bar.style.width = p + '%';
+    msg.textContent = steps[Math.min(2, Math.floor(p / 36))];
+  }, silent ? 130 : 220));
+}
+function stopPhoneScan() { phTimers.forEach(clearInterval); phTimers = []; }
+function finishPhone(digits, btn) {
+  stopPhoneScan();
+  btn.disabled = false; btn.textContent = '开始追踪';
+  document.getElementById('phScan').classList.remove('show');
+  const d = PHONE_DB.default;
+  const fmt = digits.length === 10 ? `+1 ${digits.slice(0,3)} ${digits.slice(3,6)} ${digits.slice(6)}` : d.big;
+  document.getElementById('phFmtBig').textContent = fmt;
+  document.getElementById('phInfo').innerHTML = kvRows([
+    ['归属地', d.region], ['运营商', d.carrier], ['线路类型', d.type], ['时区', d.tz, 1]
+  ]);
+  document.getElementById('phFormats').innerHTML = [
+    ['E.164', d.e164], ['国际格式', d.intl], ['本地格式', d.local]
+  ].map(([k, v]) => `
+    <div class="kv">
+      <span class="k">${k}</span>
+      <span style="display:flex;align-items:center;gap:8px;min-width:0;">
+        <span class="v mono">${v}</span>
+        <button class="iconbtn" style="width:28px;height:28px;" aria-label="拷贝 ${k}" onclick="copyText('${v}', this)">${IC.copy}</button>
+      </span>
+    </div>`).join('');
+  document.getElementById('phResult').classList.add('show');
+  const shown = fmt;
+  if (!history.some(h => h.type === 'phone' && h.value === shown)) {
+    history.unshift({ type:'phone', value:shown, time:'刚刚', sub:`${d.carrier} · 有效` });
+  }
+}
+
+/* ============ 用户名扫描 ============ */
+let unTimers = [];
+function stopUnScan() { unTimers.forEach(clearInterval); unTimers = []; document.getElementById('unScan').style.display = 'none'; document.getElementById('unGrid').style.display = 'none'; }
+const unInput = document.getElementById('unInput');
+unInput.addEventListener('input', function() {
+  clearUnErr();
+  document.getElementById('unBtn').disabled = !/^[\w.\-]{2,30}$/.test(this.value.trim());
+});
+unInput.addEventListener('blur', function() {
+  const v = this.value.trim();
+  if (v && !/^[\w.\-]{2,30}$/.test(v)) showUnErr('用户名仅支持字母、数字、点与下划线（2–30 位）。示例：username');
+});
+function showUnErr(msg) {
+  const e = document.getElementById('unErr');
+  e.textContent = msg; e.classList.add('show');
+  unInput.classList.add('err');
+}
+function clearUnErr() {
+  const e = document.getElementById('unErr');
+  e.classList.remove('show');
+  unInput.classList.remove('err');
+}
+function runUser(silent) {
+  const v = unInput.value.trim();
+  if (!/^[\w.\-]{2,30}$/.test(v)) {
+    showUnErr('用户名仅支持字母、数字、点与下划线（2–30 位）。示例：username');
+    unInput.focus();
+    return;
+  }
+  clearUnErr();
+  document.getElementById('unResult').classList.remove('show');
+  document.getElementById('unScan').style.display = 'block';
+  document.getElementById('unBtn').disabled = true;
+  document.getElementById('unName').textContent = v;
+  const grid = document.getElementById('unGrid');
+  grid.style.display = 'grid';
+  grid.innerHTML = PLATFORMS.map(([name, mono]) => `
+    <div class="pcell" data-p="${name}">
+      <div class="pm">${mono}</div>
+      <div class="pn">${name}</div>
+      <div class="ps"></div>
+    </div>`).join('');
+  const cells = [...grid.children];
+  cells.forEach((c, i) => setTimeout(() => c.classList.add('in'), 60 * (i + 1)));
+  let i = 0, hits = 0;
+  const count = document.getElementById('unCount'), bar = document.getElementById('unBar');
+  unTimers.push(setInterval(() => {
+    if (i >= cells.length) {
+      clearInterval(unTimers[0]); unTimers = [];
+      finishUser(v, grid, hits);
+      return;
+    }
+    const c = cells[i], name = PLATFORMS[i][0];
+    const ps = c.querySelector('.ps');
+    ps.innerHTML = '<span class="dotspin"></span>';
+    setTimeout(() => {
+      if (HITS.has(name)) {
+        hits++;
+        c.classList.add('hit');
+        ps.innerHTML = `<span style="color:var(--green);">${IC.check}</span>`;
+      } else {
+        c.classList.add('miss');
+        ps.innerHTML = `<span style="color:var(--label3);">${IC.minus}</span>`;
+      }
+    }, (silent ? 60 : 160) + Math.random() * (silent ? 60 : 220));
+    i++;
+    count.textContent = `已扫描 ${i}/23 个平台`;
+    bar.style.width = (i / cells.length * 100) + '%';
+  }, silent ? 100 : 300));
+}
+function finishUser(v, grid, hits) {
+  document.getElementById('unScan').style.display = 'none';
+  document.getElementById('unBtn').disabled = false;
+  document.getElementById('unHits').textContent = hits;
+  grid.querySelectorAll('.pcell.hit').forEach(c => {
+    const name = c.dataset.p;
+    c.onclick = () => toast(`演示环境：将打开 ${PL_URL[name] || name}/${v}`);
+    c.setAttribute('role', 'link');
+    c.setAttribute('aria-label', `${name} 命中，查看链接`);
+  });
+  document.getElementById('unResult').classList.add('show');
+  if (!history.some(h => h.type === 'username' && h.value === v)) {
+    history.unshift({ type:'username', value:v, time:'刚刚', sub:`${hits} 个平台命中` });
+  }
+}
+
+/* ============ 滚动：玻璃导航显隐 + Tab 收缩 ============ */
+['home','history','settings'].forEach(n => {
+  document.getElementById('scroll-' + n).addEventListener('scroll', function() {
+    document.getElementById('nav-' + n).classList.toggle('show', this.scrollTop > 34);
+    document.getElementById('screen').classList.toggle('scrolled', this.scrollTop > 34);
+  });
+});
+
+/* ============ 初始化 ============ */
+renderHistory();
+document.getElementById('ipBtn').disabled = true;
+document.getElementById('phBtn').disabled = true;
+document.getElementById('unBtn').disabled = true;
+</script>
+</body>
+</html>

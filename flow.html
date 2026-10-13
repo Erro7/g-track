@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GTRACK · iOS 26 交互流程</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  background:#F6F6F6; padding:48px 40px 72px;
+  font-family:-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  color:#1d1d1f;
+}
+.doc-head { max-width:1280px; margin:0 auto 34px; }
+.doc-head h1 { font-size:26px; font-weight:700; letter-spacing:.2px; }
+.doc-head .meta { display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
+.chip { font-size:12px; padding:5px 12px; border-radius:999px; background:#fff; border:1px solid #e0e0e3; color:#515154; font-weight:500; }
+.chip b { color:#1d1d1f; font-weight:600; }
+.legend { display:flex; gap:16px; margin-top:14px; font-size:12px; color:#6e6e73; flex-wrap:wrap; align-items:center; }
+.legend i { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:5px; vertical-align:-1px; }
+
+.task { max-width:1280px; margin:0 auto 42px; }
+.task-head { display:flex; align-items:baseline; gap:12px; margin-bottom:16px; }
+.task-no {
+  font-size:12px; font-weight:700; color:#30d158; background:rgba(48,209,88,.12);
+  padding:3px 10px; border-radius:999px; letter-spacing:.5px; flex:0 0 auto;
+}
+.task-head h2 { font-size:16px; font-weight:600; }
+.task-head p { font-size:13px; color:#86868b; }
+
+.lane { display:flex; align-items:center; gap:0; flex-wrap:nowrap; overflow-x:auto; padding:6px 2px 14px; }
+.node {
+  flex:0 0 220px; width:220px; height:476px; border-radius:20px;
+  background:#0a0a0c; border:1px solid #2a2a2e; position:relative; overflow:hidden;
+  box-shadow:0 10px 30px rgba(0,0,0,.14);
+  color:#f2f2f7; padding:0 10px;
+  font-size:10.5px; line-height:1.45;
+}
+.node.light { background:#f2f2f7; color:#1c1c1e; border-color:#d9d9de; }
+.node::after { content:attr(data-note); position:absolute; left:10px; right:10px; bottom:8px; text-align:center; font-size:9.5px; color:#8e8e93; pointer-events:none; }
+
+/* 迷你状态栏与岛 */
+.m-status { height:26px; display:flex; align-items:center; justify-content:space-between; padding:4px 6px 0; font-size:9px; font-weight:600; opacity:.9; position:relative; }
+.m-island { position:absolute; left:50%; top:4px; transform:translateX(-50%); width:44px; height:12px; border-radius:7px; background:#000; }
+.node.light .m-island { background:#1c1c1e; }
+
+/* 迷你组件 */
+.m-title { font-size:19px; font-weight:700; margin:10px 2px 2px; }
+.m-sub { font-size:9.5px; color:#98989d; margin:0 2px 8px; }
+.m-nav { display:flex; align-items:center; gap:4px; margin:12px 0 6px; font-size:11px; font-weight:600; }
+.m-nav .bk { color:#0a84ff; font-weight:500; }
+.m-nav .tt { flex:1; text-align:center; }
+.m-card {
+  background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.1);
+  border-radius:11px; padding:8px 9px; margin-bottom:7px;
+}
+.node.light .m-card { background:#fff; border-color:#e3e3e8; }
+.m-card.hi { background:rgba(48,209,88,.14); border-color:rgba(48,209,88,.45); }
+.m-card.warn { background:rgba(255,69,58,.12); border-color:rgba(255,69,58,.45); }
+.m-card.dim { opacity:.45; }
+.m-row { display:flex; justify-content:space-between; gap:6px; padding:3px 0; }
+.m-row + .m-row { border-top:1px solid rgba(255,255,255,.07); }
+.node.light .m-row + .m-row { border-top-color:rgba(0,0,0,.06); }
+.m-row .k { color:#98989d; flex:0 0 auto; }
+.m-row .v { text-align:right; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.m-mono { font-family:ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+.m-btn {
+  height:26px; border-radius:14px; background:#30d158; color:#04110a;
+  display:flex; align-items:center; justify-content:center; font-weight:600; font-size:10.5px;
+}
+.m-btn.off { opacity:.4; }
+.m-btn.blue { background:#0a84ff; color:#fff; }
+.m-btn.ghost { background:rgba(255,255,255,.12); color:#30d158; }
+.m-inp {
+  height:28px; border-radius:9px; background:rgba(120,120,128,.24);
+  display:flex; align-items:center; padding:0 9px; color:#8e8e93; margin-bottom:7px;
+}
+.node.light .m-inp { background:rgba(120,120,128,.14); }
+.m-inp.err { background:transparent; border:1.5px solid #ff453a; color:#ff453a; }
+.m-tag { display:inline-flex; padding:2px 7px; border-radius:99px; font-size:8.5px; font-weight:600; }
+.m-tag.g { background:rgba(48,209,88,.16); color:#30d158; }
+.m-tag.o { background:rgba(255,159,10,.16); color:#ff9f0a; }
+.m-tag.b { background:rgba(10,132,255,.16); color:#0a84ff; }
+.m-tag.p { background:rgba(191,90,242,.16); color:#bf5af2; }
+.m-tag.r { background:rgba(255,69,58,.16); color:#ff453a; }
+.m-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:4px; margin-top:4px; }
+.m-cell { border-radius:7px; background:rgba(120,120,128,.18); padding:5px 0 4px; text-align:center; font-size:8.5px; color:#98989d; }
+.m-cell.hit { background:rgba(48,209,88,.16); color:#f2f2f7; border:1px solid rgba(48,209,88,.4); }
+.m-cell.hit b { display:block; color:#30d158; font-size:9px; }
+.m-tab {
+  position:absolute; left:50%; transform:translateX(-50%); bottom:22px;
+  display:flex; gap:8px; padding:5px 7px; border-radius:15px;
+  background:rgba(40,40,44,.8); border:1px solid rgba(255,255,255,.12); backdrop-filter:blur(8px);
+}
+.node.light .m-tab { background:rgba(255,255,255,.85); border-color:rgba(0,0,0,.08); }
+.m-tab span { font-size:8px; color:#98989d; display:flex; flex-direction:column; align-items:center; gap:2px; min-width:26px; }
+.m-tab span.on { color:#30d158; }
+.m-tab i { width:12px; height:12px; border-radius:4px; background:currentColor; opacity:.85; }
+.m-alert {
+  position:absolute; left:16px; right:16px; top:150px;
+  background:rgba(40,40,44,.92); border:1px solid rgba(255,255,255,.14); border-radius:14px;
+  padding:12px 10px 0; text-align:center; box-shadow:0 12px 30px rgba(0,0,0,.5);
+}
+.m-alert h4 { font-size:10.5px; font-weight:600; }
+.m-alert p { font-size:9px; color:#98989d; margin:4px 0 8px; }
+.m-alert .ab { display:flex; border-top:1px solid rgba(255,255,255,.1); margin:0 -10px; }
+.m-alert .ab span { flex:1; padding:6px 0; font-size:9.5px; color:#0a84ff; }
+.m-alert .ab span + span { border-left:1px solid rgba(255,255,255,.1); color:#ff453a; font-weight:600; }
+
+/* 箭头 */
+.arrow { flex:0 0 118px; display:flex; flex-direction:column; align-items:center; gap:5px; padding:0 6px; position:relative; }
+.arrow .lbl {
+  font-size:11px; font-weight:600; color:#1d1d1f; background:#fff;
+  border:1px solid #e0e0e3; border-radius:999px; padding:4px 11px; white-space:nowrap;
+  box-shadow:0 2px 6px rgba(0,0,0,.05); text-align:center; max-width:118px;
+}
+.arrow .lbl small { display:block; font-size:9px; color:#86868b; font-weight:400; }
+.arrow svg { display:block; }
+.arrow.dashed .lbl { border-style:dashed; color:#86868b; }
+
+/* 流程图底部注记 */
+.doc-foot { max-width:1280px; margin:0 auto; border-top:1px solid #e0e0e3; padding-top:20px; display:flex; gap:36px; flex-wrap:wrap; }
+.doc-foot .col h3 { font-size:13px; font-weight:600; margin-bottom:8px; }
+.doc-foot .col p, .doc-foot .col li { font-size:12px; color:#6e6e73; line-height:1.8; }
+.doc-foot ul { list-style:none; }
+.doc-foot li::before { content:"—"; color:#30d158; margin-right:6px; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition:none !important; animation:none !important; } }
+</style>
+</head>
+<body>
+
+<header class="doc-head">
+  <h1>GTRACK · iOS 26 交互流程</h1>
+  <div class="meta">
+    <span class="chip">平台 <b>iOS 26</b></span>
+    <span class="chip">设计语言 <b>Liquid Glass</b></span>
+    <span class="chip">默认 <b>深色</b></span>
+    <span class="chip">Tab <b>侦查 / 记录 / 设置</b></span>
+    <span class="chip">交付 <b>prototype.html（可点击）</b></span>
+  </div>
+  <div class="legend">
+    <span><i style="background:#30d158"></i>命中 / 成功</span>
+    <span><i style="background:#0a84ff"></i>操作 / 链接</span>
+    <span><i style="background:#ff9f0a"></i>示例数据徽标</span>
+    <span><i style="background:#ff453a"></i>错误反馈</span>
+    <span>箭头上文字 = 用户触发动作</span>
+  </div>
+</header>
+
+<!-- ============ T1 启动与合规 ============ -->
+<section class="task">
+  <div class="task-head"><span class="task-no">T1</span><h2>启动与合规确认</h2><p>首启强制阅读使用声明，进入后不再重复</p></div>
+  <div class="lane">
+    <div class="node" data-note="状态：首启 · 完整声明可点开弹窗">
+      <div class="m-status">9:41<span class="m-island"></span></div>
+      <div style="text-align:center; margin-top:34px; color:#30d158;">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.2c-3.1 0-5.4 2.4-5.4 5.6v4.4c0 .9-.5 1.9-1.3 3.1-.5.8-.8 1.4-.8 1.8 0 .8.6 1.2 1.6 1.2h11.8c1 0 1.6-.4 1.6-1.2 0-.4-.3-1-.8-1.8-.8-1.2-1.3-2.2-1.3-3.1V8.8c0-3.2-2.3-5.6-5.4-5.6z"/><path d="M10 20.4c.4.9 1.1 1.4 2 1.4s1.6-.5 2-1.4"/></svg>
+      </div>
+      <div style="text-align:center; font-size:19px; font-weight:700; margin-top:8px;">GTRACK</div>
+      <div style="text-align:center; font-size:9px; color:#98989d; margin:4px 0 14px;">合法授权下的公开信息核查工具</div>
+      <div class="m-card"><div class="m-row"><span class="k">仅限合法授权调查</span></div></div>
+      <div class="m-card"><div class="m-row"><span class="k">只查公开数据源</span></div></div>
+      <div class="m-card"><div class="m-row"><span class="k">记录仅存本机</span></div></div>
+      <div class="m-btn" style="margin-top:10px;">同意并进入</div>
+      <div style="text-align:center; font-size:8.5px; color:#98989d; margin-top:7px; text-decoration:underline;">查看完整使用声明</div>
+    </div>
+    <div class="arrow">
+      <span class="lbl">点「同意并进入」<small>声明全文可先查看</small></span>
+      <svg width="90" height="16" viewBox="0 0 90 16"><path d="M0 8h78" stroke="#b9b9be" stroke-width="1.6" fill="none"/><path d="M78 2.8L88 8l-10 5.2z" fill="#b9b9be"/></svg>
+    </div>
+    <div class="node" data-note="根视图 · Liquid Glass 悬浮 Tab 栏">
+      <div class="m-status">9:41<span class="m-island"></span></div>
+      <div class="m-title">侦查台</div>
+      <div class="m-sub">查询行为仅存于本机</div>
+      <div class="m-card"><div class="m-row"><span class="k">本机 IP <span class="m-tag b">示例</span></span><span class="v m-mono">198.51.100.24</span></div></div>
+      <div class="m-card hi"><div class="m-row"><span>IP 定位</span><span class="k">归属地 · ASN · 运营商 →</span></div></div>
+      <div class="m-card"><div class="m-row"><span>手机号追踪</span><span class="k">归属地与运营商 →</span></div></div>
+      <div class="m-card"><div class="m-row"><span>用户名扫描</span><span class="k">23 个平台 →</span></div></div>
+      <div class="m-card dim"><div class="m-row"><span class="k">最近侦查</span><span class="v m-mono">1.1.1.1</span></div></div>
+      <div class="m-tab"><span class="on"><i></i>侦查</span><span><i></i>记录</span><span><i></i>设置</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ T2 IP 定位 ============ -->
+<section class="task">
+  <div class="task-head"><span class="task-no">T2</span><h2>IP 定位</h2><p>输入 → 校验 → 扫描 → 归属结果（对应源码 IP Tracker + ipwho.is）</p></div>
+  <div class="lane">
+    <div class="node" data-note="复用 T1 侦查台节点">
+      <div class="m-status">9:41<span class="m-island"></span></div>
+      <div class="m-title">侦查台</div>
+      <div class="m-card hi"><div class="m-row"><span>IP 定位</span><span class="k">→</span></div></div>
+      <div class="m-tab"><span class="on"><i></i>侦查</span><span><i></i>记录</span><span><i></i>设置</span></div>
+    </div>
+    <div class="arrow">
+      <span class="lbl">点「IP 定位」入口<small>右滑推入 · 返回键出栈</small></span>
+      <svg width="90" height="16" viewBox="0 0 90 16"><path d="M0 8h78" stroke="#b9b9be" stroke-width="1.6" fill="none"/><path d="M78 2.8L88 8l-10 5.2z" fill="#b9b9be"/></svg>
+    </div>
+    <div class="node" data-note="空态：按钮禁用；错误：行内红字 + 保留输入">
+      <div class="m-status">9:41<span class="m-island"></span></div>
+      <div class="m-nav"><span class="bk">‹ 返回</span><span class="tt">IP 定位</span></div>
+      <div class="m-inp m-mono">1.1.1.1</div>
+      <div class="m-inp err m-mono">203.0.11<span style="opacity:.5">（残缺）</span></div>
+      <div style="font-size:9px; color:#ff453a; margin:-4px 2px 8px;">IP 格式不正确。请检查缺失的数字段，示例：1.1.1.1</div>
+      <div class="m-btn">开始追踪</div>
+      <div style="font-size:9px; color:#98989d; text-align:center; margin-top:8px;">失焦校验 · 输入合法即消除错误</div>
+    </div>
+    <div class="arrow">
+      <span class="lbl">点「开始追踪」<small>合法 IP · 按钮防重复提交</small></span>
+      <svg width="90" height="16" viewBox="0 0 90 16"><path d="M0 8h78" stroke="#b9b9be" stroke-width="1.6" fill="none"/><path d="M78 2.8L88 8l-10 5.2z" fill="#b9b9be"/></svg>
+    </div>
+    <div class="node" data-note="加载态：环形进度 + 分步文案 + 进度条（约 2.4s）">
+      <div class="m-status">9:41<span class="m-island"></span></div>
+      <div class="m-nav"><span class="bk">‹ 返回</span><span class="tt">IP 定位</span></div>
+      <div style="text-align:center; margin-top:26px;">
+        <div style="width:56px;height:56px;margin:0 auto;border-radius:50%;border:4px solid rgba(255,255,255,.12);border-top-color:#30d158;"></div>
+        <div style="font-size:13px;font-weight:700;margin-top:10px;">64%</div>
+      </div>
+      <div style="text-align:center; font-size:9.5px; color:#98989d; margin:8px 0 12px;">正在查询归属地…</div>
+      <div style="height:4px;border-radius:2px;background:rgba(255,255,255,.12);overflow:hidden;"><i style="display:block;height:100%;width:64%;background:#30d158;"></i></div>
+    </div>
+    <div class="arrow">
+      <span class="lbl">扫描完成<small>自动进入结果</small></span>
+      <svg width="90" height="16" viewBox="0 0 90 16"><path d="M0 8h78" stroke="#b9b9be" stroke-width="1.6" fill="none"/><path d="M78 2.8L88 8l-10 5.2z" fill="#b9b9be"/></svg>
+    </div>
+    <div class="node" data-note="结果态：位置 / 网络两组字段 + 地图直达；写入最近记录">
+      <div class="m-status">9:41<span class="m-island"></span></div>
+      <div class="m-nav"><span class="bk">‹ 返回</span><span class="tt">IP 定位</span></div>
+      <div class="m-card" style="height:52px; position:relative;">
+        <span class="m-tag b" style="position:absolute; right:6px; top:6px;">US</span>
+        <span class="m-tag o" style="position:absolute; left:6px; bottom:6px;">示例数据</span>
+        <span class="m-mono" style="position:absolute; left:6px; top:6px; font-size:9px; color:#98989d;">34.0522, -118.2437</span>
+      </div>
+      <div class="m-card">
+        <div class="m-row"><span class="k">国家 / 地区</span><span class="v">美国</span></div>
+        <div class="m-row"><span class="k">城市</span><span class="v">洛杉矶</span></div>
+        <div class="m-row"><span class="k">当地时间</span><span class="v m-mono">18:42 (UTC-8)</span></div>
+      </div>
+      <div class="m-card">
+        <div class="m-row"><span class="k">ASN</span><span class="v m-mono">AS14061</span></div>
+        <div class="m-row"><span class="k">ISP</span><span class="v">DigitalOcean, LLC</span></div>
+      </div>
+      <div style="display:flex; gap:5px; margin-top:6px;">
+        <div class="m-btn blue" style="flex:1;">在地图中打开</div>
+        <div class="m-btn ghost" style="flex:1;">复制坐标</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ T3 手机号追踪 ============ -->
+<section class="task">
+  <div class="task-head"><span class="task-no">T3</span><h2>手机号追踪</h2><p>区号 + 号码 → 校验 → 归属与格式（对应源码 Phone Tracker + phonenumbers）</p></div>
+  <div class="lane">
+    <div class="node" data-note="复用 T1 侦查台节点">
+      <div class="m-status">9:41<span class="m-island"></span></div>
+      <div class="m-title">侦查台</div>
+      <div class="m-card"><div class="m-row"><span>手机号追踪</span><span class="k">→</span></div></div>
+      <div class="m-tab"><span class="on"><i></i>侦查</span><span><i></i>记录</span><span><i></i>设置</span></div>
+    </div>
+    <div class="arrow">
+      <span class="lbl">点「手机号追踪」</span>
+      <svg width="90" height="16" viewBox="0 0 90 16"><path d="M0 8h78" stroke="#b9b9be" stroke-width="1.6" fill="none"/><path d="M78 2.8L88 8l-10 5.2z" fill="#b9b9be"/></svg>
+    </div>
+    <div class="node" data-note="错误态：少于 7 位失焦提示；扫描态同 T2（约 1.8s）">
+      <div class="m-status">9:41<span class="m-island"></span></div>
+      <div class="m-nav"><span class="bk">‹ 返回</span><span class="tt">手机号追踪</span></div>
+      <div class="m-inp m-mono"><b style="color:#f2f2f7; font-weight:600;">+1</b>&nbsp;&nbsp;415 555 0132</div>
+      <div class="m-btn">开始追踪</div>
+      <div style="font-size:9px; color:#98989d; margin:10px 2px 4px;">无效示例（失焦后）：</div>
+      <div class="m-inp err m-mono">415 55</div>
+      <div style="font-size:9px; color:#ff453a;">号码不完整，请输入完整号码。示例：415 555 0132</div>
+    </div>
+    <div class="arrow">
+      <span class="lbl">输入完整号码<small>点「开始追踪」</small></span>
+      <svg width="90" height="16" viewBox="0 0 90 16"><path d="M0 8h78" stroke="#b9b9be" stroke-width="1.6" fill="none"/><path d="M78 2.8L88 8l-10 5.2z" fill="#b9b9be"/></svg>
+    </div>
+    <div class="node" data-note="结果态：有效性徽标 + 归属组 + 三种格式可单独拷贝">
+      <div class="m-status">9:41<span class="m-island"></span></div>
+      <div class="m-nav"><span class="bk">‹ 返回</span><span class="tt">手机号追踪</span></div>
+      <div class="m-card">
+        <div style="font-size:13px; font-weight:700;" class="m-mono">+1 415 555 0132</div>
+        <div style="margin-top:4px;"><span class="m-tag g">号码有效</span> <span class="m-tag o">示例数据</span></div>
+      </div>
+      <div class="m-card">
+        <div class="m-row"><span class="k">归属地</span><span class="v">旧金山，加利福尼亚</span></div>
+        <div class="m-row"><span class="k">运营商</span><span class="v">T-Mobile US</span></div>
+        <div class="m-row"><span class="k">线路类型</span><span class="v">移动号码</span></div>
+        <div class="m-row"><span class="k">时区</span><span class="v m-mono">America/Los_Angeles</span></div>
+      </div>
+      <div class="m-card">
+        <div class="m-row"><span class="k">E.164</span><span class="v m-mono">+14155550132 ⧉</span></div>
+        <div class="m-row"><span class="k">国际格式</span><span class="v m-mono">+1 415-555-0132 ⧉</span></div>
+        <div class="m-row"><span class="k">本地格式</span><span class="v m-mono">(415) 555-0132 ⧉</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ T4 用户名扫描 ============ -->
+<section class="task">
+  <div class="task-head"><span class="task-no">T4</span><h2>用户名跨平台扫描</h2><p>一次核查 23 个平台（对应源码 Username Tracker 的平台清单）</p></div>
+  <div class="lane">
+    <div class="node" data-note="复用 T1 侦查台节点">
+      <div class="m-status">9:41<span class="m-island"></span></div>
+      <div class="m-title">侦查台</div>
+      <div class="m-card"><div class="m-row"><span>用户名扫描</span><span class="k">→</span></div></div>
+      <div class="m-tab"><span class="on"><i></i>侦查</span><span><i></i>记录</span><span><i></i>设置</span></div>
+    </div>
+    <div class="arrow">
+      <span class="lbl">点「用户名扫描」</span>
+      <svg width="90" height="16" viewBox="0 0 90 16"><path d="M0 8h78" stroke="#b9b9be" stroke-width="1.6" fill="none"/><path d="M78 2.8L88 8l-10 5.2z" fill="#b9b9be"/></svg>
+    </div>
+    <div class="node" data-note="扫描态：平台卡片逐个亮起，计数与进度条同步">
+      <div class="m-status">9:41<span class="m-island"></span></div>
+      <div class="m-nav"><span class="bk">‹ 返回</span><span class="tt">用户名扫描</span></div>
+      <div class="m-inp m-mono">username</div>
+      <div class="m-btn">开始扫描</div>
+      <div class="m-card" style="margin-top:8px;">
+        <div class="m-row"><span>已扫描 <b>9/23</b> 个平台</span></div>
+        <div style="height:3px;border-radius:2px;background:rgba(255,255,255,.12);margin-top:5px;overflow:hidden;"><i style="display:block;height:100%;width:39%;background:#30d158;"></i></div>
+      </div>
+      <div class="m-grid">
+        <div class="m-cell hit">Gh<b>命中</b></div>
+        <div class="m-cell">In</div>
+        <div class="m-cell hit">Te<b>命中</b></div>
+        <div class="m-cell">Li</div>
+        <div class="m-cell">Pi</div>
+        <div class="m-cell">Tu</div>
+      </div>
+    </div>
+    <div class="arrow">
+      <span class="lbl">23 个平台扫描完成<small>每平台独立判定</small></span>
+      <svg width="90" height="16" viewBox="0 0 90 16"><path d="M0 8h78" stroke="#b9b9be" stroke-width="1.6" fill="none"/><path d="M78 2.8L88 8l-10 5.2z" fill="#b9b9be"/></svg>
+    </div>
+    <div class="node" data-note="结果态：命中卡可点，跳转对应平台链接；未命中置灰">
+      <div class="m-status">9:41<span class="m-island"></span></div>
+      <div class="m-nav"><span class="bk">‹ 返回</span><span class="tt">用户名扫描</span></div>
+      <div class="m-card hi">
+        <div class="m-row"><span><b class="m-mono">username</b> · <b style="color:#30d158">7</b> 个平台命中</span><span class="m-tag o">示例</span></div>
+        <div style="font-size:8.5px; color:#98989d; margin-top:3px;">点击命中卡片可查看对应平台链接</div>
+      </div>
+      <div class="m-grid">
+        <div class="m-cell hit">Gh<b>命中</b></div>
+        <div class="m-cell hit">In<b>命中</b></div>
+        <div class="m-cell hit">Te<b>命中</b></div>
+        <div class="m-cell hit">M<b>命中</b></div>
+        <div class="m-cell hit">Tw<b>命中</b></div>
+        <div class="m-cell hit">Sc<b>命中</b></div>
+        <div class="m-cell hit">Tt<b>命中</b></div>
+        <div class="m-cell dim">Fb</div>
+        <div class="m-cell dim">Li</div>
+      </div>
+      <div class="m-btn ghost" style="margin-top:8px;">保存至记录</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ T5 记录回查 ============ -->
+<section class="task">
+  <div class="task-head"><span class="task-no">T5</span><h2>记录回查</h2><p>历史查询按类型分组，点任意一条回填并直接出结果</p></div>
+  <div class="lane">
+    <div class="node" data-note="根视图间切换 · Tab 栏常驻">
+      <div class="m-status">9:41<span class="m-island"></span></div>
+      <div class="m-title">侦查台</div>
+      <div class="m-card dim"><div class="m-row"><span class="k">最近侦查</span><span class="k">查看全部 →</span></div></div>
+      <div class="m-tab"><span class="on"><i></i>侦查</span><span><i></i>记录</span><span><i></i>设置</span></div>
+    </div>
+    <div class="arrow">
+      <span class="lbl">点 Tab「记录」<small>或首页「查看全部」</small></span>
+      <svg width="90" height="16" viewBox="0 0 90 16"><path d="M0 8h78" stroke="#b9b9be" stroke-width="1.6" fill="none"/><path d="M78 2.8L88 8l-10 5.2z" fill="#b9b9be"/></svg>
+    </div>
+    <div class="node" data-note="Populated 态：按 IP / 手机号 / 用户名 分组">
+      <div class="m-status">9:41<span class="m-island"></span></div>
+      <div class="m-title" style="font-size:17px;">记录</div>
+      <div style="font-size:9px; color:#98989d; margin:0 2px 8px;">IP 定位</div>
+      <div class="m-card"><div class="m-row"><span class="v m-mono">1.1.1.1</span><span class="k">12 分钟前 →</span></div></div>
+      <div class="m-card"><div class="m-row"><span class="v m-mono">198.51.100.7</span><span class="k">3 天前 →</span></div></div>
+      <div style="font-size:9px; color:#98989d; margin:8px 2px 6px;">手机号 / 用户名</div>
+      <div class="m-card dim"><div class="m-row"><span class="v m-mono">+1 415 555 0132</span><span class="k">→</span></div></div>
+      <div class="m-tab"><span><i></i>侦查</span><span class="on"><i></i>记录</span><span><i></i>设置</span></div>
+    </div>
+    <div class="arrow">
+      <span class="lbl">点任一记录<small>按类型回填对应查询页</small></span>
+      <svg width="90" height="16" viewBox="0 0 90 16"><path d="M0 8h78" stroke="#b9b9be" stroke-width="1.6" fill="none"/><path d="M78 2.8L88 8l-10 5.2z" fill="#b9b9be"/></svg>
+    </div>
+    <div class="node" data-note="直接重放扫描并出结果，无需重新输入">
+      <div class="m-status">9:41<span class="m-island"></span></div>
+      <div class="m-nav"><span class="bk">‹ 返回</span><span class="tt">IP 定位</span></div>
+      <div class="m-inp m-mono">1.1.1.1</div>
+      <div class="m-card" style="height:44px; position:relative;">
+        <span class="m-tag b" style="position:absolute; right:6px; top:6px;">US</span>
+        <span class="m-tag o" style="position:absolute; left:6px; bottom:6px;">示例数据</span>
+      </div>
+      <div class="m-card">
+        <div class="m-row"><span class="k">城市</span><span class="v">洛杉矶</span></div>
+        <div class="m-row"><span class="k">ASN</span><span class="v m-mono">AS14061</span></div>
+      </div>
+      <div style="font-size:9px; color:#30d158; text-align:center; margin-top:8px;">已自动写入「记录」顶部</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ T6 数据清除 ============ -->
+<section class="task">
+  <div class="task-head"><span class="task-no">T6</span><h2>数据清除（危险操作）</h2><p>破坏性操作必须经确认弹窗，清空后进入空状态引导</p></div>
+  <div class="lane">
+    <div class="node" data-note="复用 T1 侦查台节点">
+      <div class="m-status">9:41<span class="m-island"></span></div>
+      <div class="m-title">侦查台</div>
+      <div class="m-tab"><span class="on"><i></i>侦查</span><span><i></i>记录</span><span><i></i>设置</span></div>
+    </div>
+    <div class="arrow">
+      <span class="lbl">点 Tab「设置」</span>
+      <svg width="90" height="16" viewBox="0 0 90 16"><path d="M0 8h78" stroke="#b9b9be" stroke-width="1.6" fill="none"/><path d="M78 2.8L88 8l-10 5.2z" fill="#b9b9be"/></svg>
+    </div>
+    <div class="node" data-note="同屏可切外观：深色 ↔ 浅色（Liquid Glass 双材质）">
+      <div class="m-status">9:41<span class="m-island"></span></div>
+      <div class="m-title" style="font-size:17px;">设置</div>
+      <div class="m-card">
+        <div class="m-row"><span class="k">外观</span><span class="v">深色 | <b>浅色</b></span></div>
+      </div>
+      <div class="m-card"><div class="m-row"><span class="k">IPWHO.IS 接口</span><span class="v">公共接口</span></div></div>
+      <div class="m-card warn"><div class="m-row"><span style="color:#ff453a;">清除全部记录</span><span class="k" style="color:#ff453a;">→</span></div></div>
+      <div class="m-tab"><span><i></i>侦查</span><span><i></i>记录</span><span class="on"><i></i>设置</span></div>
+    </div>
+    <div class="arrow">
+      <span class="lbl">点「清除全部记录」</span>
+      <svg width="90" height="16" viewBox="0 0 90 16"><path d="M0 8h78" stroke="#b9b9be" stroke-width="1.6" fill="none"/><path d="M78 2.8L88 8l-10 5.2z" fill="#b9b9be"/></svg>
+    </div>
+    <div class="node" data-note="alertdialog：取消 / 清除 二选一，焦点入弹窗">
+      <div class="m-status">9:41<span class="m-island"></span></div>
+      <div style="opacity:.35" class="m-title">设置</div>
+      <div class="m-alert">
+        <h4>清除全部侦查记录？</h4>
+        <p>将删除保存在本机的所有历史查询，操作不可撤销。</p>
+        <div class="ab"><span>取消</span><span>清除</span></div>
+      </div>
+      <div class="m-tab" style="opacity:.4"><span><i></i>侦查</span><span><i></i>记录</span><span class="on"><i></i>设置</span></div>
+    </div>
+    <div class="arrow dashed">
+      <span class="lbl">点「清除」<small>「取消」则原样返回</small></span>
+      <svg width="90" height="16" viewBox="0 0 90 16"><path d="M0 8h78" stroke="#c7c7cc" stroke-width="1.6" fill="none" stroke-dasharray="4 3"/><path d="M78 2.8L88 8l-10 5.2z" fill="#c7c7cc"/></svg>
+    </div>
+    <div class="node" data-note="Cleared 空态：说明 + 主行动按钮「去侦查台」">
+      <div class="m-status">9:41<span class="m-island"></span></div>
+      <div class="m-title" style="font-size:17px;">记录</div>
+      <div style="text-align:center; margin-top:52px;">
+        <div style="width:40px;height:40px;margin:0 auto 10px;border-radius:12px;background:rgba(120,120,128,.18);"></div>
+        <div style="font-size:12px; font-weight:600;">还没有侦查记录</div>
+        <p style="font-size:9px; color:#98989d; margin:5px 14px 12px;">在侦查台发起的每一次查询<br>都会自动保存在这里，随时回查。</p>
+        <div class="m-btn ghost" style="margin:0 auto; width:120px;">去侦查台</div>
+      </div>
+      <div class="m-tab"><span><i></i>侦查</span><span class="on"><i></i>记录</span><span><i></i>设置</span></div>
+    </div>
+  </div>
+</section>
+
+<footer class="doc-foot">
+  <div class="col" style="flex:1; min-width:260px;">
+    <h3>状态覆盖矩阵</h3>
+    <ul>
+      <li>加载：环形 / 网格扫描动效，均有确定时长与进度，无无限转圈</li>
+      <li>空态：记录清空后给出说明 + 「去侦查台」行动</li>
+      <li>错误：IP / 号码 / 用户名 行内红字，保留输入并给修正示例</li>
+      <li>结果态：三类查询独立结果页，字段来自源码真实数据结构</li>
+      <li>边界：保留地址 127.0.0.1 专项说明；30 位长用户名不破版</li>
+    </ul>
+  </div>
+  <div class="col" style="flex:1; min-width:260px;">
+    <h3>SwiftUI 实现注记（闭源开发阶段）</h3>
+    <ul>
+      <li>页面栈：NavigationStack + navigationDestination（弃用 NavigationView）</li>
+      <li>状态：@Observable 视图模型；返回用 @Environment(\.dismiss)</li>
+      <li>Tab：TabView 底部栏 + minimizeBehavior，滚动时自动收缩</li>
+      <li>材质：GlassEffectContainer / .glassEffect() 实现本稿玻璃参数</li>
+      <li>动效降级：@Environment(\.accessibilityReduceMotion)</li>
+    </ul>
+  </div>
+  <div class="col" style="flex:1; min-width:220px;">
+    <h3>数据与合规</h3>
+    <p>原型中所有查询结果均为演示数据：IP 使用 RFC 5737 文档地址段（203.0.113.0/24、198.51.100.0/24），号码使用影视保留号段 555-01XX，并逐处标注「示例」徽标。上线版接入真实接口后由使用声明约束合规边界。</p>
+  </div>
+</footer>
+
+</body>
+</html>

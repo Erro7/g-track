@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="phosphor">#30D158</color>
+    <color name="phosphor_deep">#1FA84B</color>
+    <color name="gt_bg">#050B08</color>
+    <color name="gt_surface">#14181A</color>
+    <color name="gt_label">#F2F2F7</color>
+    <color name="gt_label_2">#99EBEBF5</color>
+</resources>

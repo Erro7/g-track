@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 合规与免责声明
+    url: https://github.com/<OWNER>/<REPO>#-合规与免责使用--二次分发前必读
+    about: 使用前请先阅读 README 中的用途边界与禁止行为。
+  - name: 设计规范（DESIGN.md）
+    url: https://github.com/<OWNER>/<REPO>/blob/main/DESIGN.md
+    about: 视觉 / 交互问题请先对照设计规范与 prototype.html。
+  - name: 上游技术指标（UPSTREAM.md）
+    url: https://github.com/<OWNER>/<REPO>/blob/main/UPSTREAM.md
+    about: 平台清单与技术基线以上游为准。
+  - name: 安全与合规报告
+    url: https://github.com/<OWNER>/<REPO>/security/advisories/new
+    about: 安全 / 隐私问题请用 Security Advisories 私密提交，不要开公开 issue。

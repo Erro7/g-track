@@ -1,0 +1,18 @@
+# 原型 / 本地临时产物
+meta.json
+style-samples*.html
+.DS_Store
+.build/
+
+# Android：本地与构建产物
+app/android/local.properties
+app/android/.gradle/
+app/android/.kotlin/
+app/android/build/
+app/android/app/build/
+*.apk
+*.aab
+
+# iOS：由 xcodegen 从 project.yml 生成，不入库
+app/ios/*.xcodeproj/
+app/ios/*.xcworkspace/
